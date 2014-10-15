@@ -1,4 +1,4 @@
 HttpRequest
 ===========
 
-HttpRequest for PHP, Python, Node/JS (**in progress do not use**)
+HttpRequest for PHP, Python, Node/JS, ActionScript (**in progress do not use**)
