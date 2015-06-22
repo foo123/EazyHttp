@@ -265,7 +265,7 @@ function NodeRequest( inst, url, options )
 
     var data = '';
     http
-        .get(options, function( resp ) {
+        .request(options, function( resp ) {
             resp.on('data', function(chunk){
                 //do something with chunk
                 data += chunk;
@@ -281,7 +281,7 @@ function NodeRequest( inst, url, options )
 
 function ClientRequest( inst, url, options ) 
 {
-    var xmlhttp = new http() ;
+    var xmlhttp = new http();
     xmlhttp.onload = function( ) {
         if ( 200 === xmlhttp.status ) callback( xmlhttp.responseText );
         else callback( '' );
@@ -289,6 +289,37 @@ function ClientRequest( inst, url, options )
     xmlhttp.open(method, url, true);  // 'true' makes the request asynchronous
     xmlhttp.send(params);
 }
+
+// adapted from https://github.com/rse/node-xmlhttprequest-cookie
+//  - http://tools.ietf.org/html/rfc6265
+//  - http://en.wikipedia.org/wiki/HTTP_cookie
+//  Two example HTTP headers:
+//  - Set-Cookie: LSID=DQAAAK…Eaem_vYg; Domain=docs.foo.com; Path=/accounts; Expires=Wed, 13 Jan 2021 22:23:01 GMT; Secure; HttpOnly
+//  - Cookie: LSID=DQAAAK…Eaem_vYg; FOO=bArBaz
+function HttpCookie(name, value, domain, path, expires, secure, httponly) 
+{
+    if ( is_obj(name) )
+    {
+        return extend({
+         name     : ""
+        ,value    : ""
+        ,domain   : ""
+        ,path     : "/"
+        ,expires  : new Date(Date.now() + 31536000000)
+        ,secure   : false
+        ,httponly : false
+        }, name);
+    }
+    return {
+     name     : name     || ""
+    ,value    : value    || ""
+    ,domain   : domain   || ""
+    ,path     : path     || "/"
+    ,expires  : expires  || new Date(Date.now() + 31536000000)
+    ,secure   : secure || false
+    ,httponly : httponly || false
+    };
+};
 
 var HttpLayer = function HttpLayer( ){ };
 
@@ -307,7 +338,7 @@ HttpLayer.unglue = function( s ) {
 };
 
 // parse and extract uri components and optional query/fragment params
-HttpLayer.parse = function( s, query_p, fragment_p ) {
+HttpLayer.parse_url = function( s, query_p, fragment_p ) {
     var self = this, COMPONENTS = { };
     if ( s )
     {
@@ -335,7 +366,7 @@ HttpLayer.parse = function( s, query_p, fragment_p ) {
 };
 
 // build a url from baseUrl plus query/hash params
-HttpLayer.build = function( baseUrl, query, hash, q, h ) {
+HttpLayer.build_url = function( baseUrl, query, hash, q, h ) {
     var self = this,
         url = '' + baseUrl;
     if ( arguments.length < 5 ) h = '#';
@@ -343,6 +374,105 @@ HttpLayer.build = function( baseUrl, query, hash, q, h ) {
     if ( query )  url += q + self.glue( query );
     if ( hash )  url += h + self.glue( hash );
     return url;
+};
+
+// parse and extract headers from header_str
+HttpLayer.parse_headers = function( s ) {
+    var headers = { },
+        key = null, lines, parts, i, l, line;
+    if ( s && s.length )
+    {
+        lines = s.split(/(\r\n)|\r|\n/g);
+        l = lines.length;
+        for (i=0; i<l; i++)
+        {
+            line = lines[i];
+            parts = line.split(":");
+            if ( parts.length > 1 )
+            {
+                key = trim(parts.shift());
+                headers[key] = parts.join(":");
+            }
+            else if (key)
+            {
+                headers[key] += "\r\n" + parts[0];
+            }
+        }
+    }
+    return headers;
+};
+
+// parse and extract headers from header_str
+HttpLayer.build_headers = function( headers ) {
+    var header = '',
+        key = null, lines, parts, i, l, line;
+    lines = s.split(/(\r\n)|\r|\n/g);
+    l = lines.length;
+    for (i=0; i<l; i++)
+    {
+        line = lines[i];
+        parts = line.split(":");
+        if ( parts.length > 1 )
+        {
+            key = trim(parts.shift());
+            headers[key] = parts.join(":");
+        }
+        else if (key)
+        {
+            headers[key] += "\r\n" + parts[0];
+        }
+    }
+    return header;
+};
+
+/*  parse a "Set-Cookie"-style header value  */
+HttpLayer.parse_cookie = function( cookieString, url ) {
+    /*  generate new cookie and initialize it according to the URL  */
+    var cookie = HttpCookie( );
+
+    /*  optionally initialize for a particular URL  */
+    if ( "undefined" !== typeof url ) 
+    {
+        if ( "string" === typeof url ) url = this.parse_url( url, false, false );
+        cookie.domain = url.host;
+        cookie.path   = url.path;
+    }
+
+    /*  parse value/name  */
+    var equalsSplit = /([^=]+)(?:=(.*))?/;
+    var cookieParams = ("" + cookieString).split("; ");
+    var cookieParam;
+    if ((cookieParam = cookieParams.shift().match(equalsSplit)) === null)
+        throw new Error("failed to parse cookie string");
+    cookie.name  = cookieParam[1];
+    cookie.value = cookieParam[2];
+
+    /*  parse remaining attributes  */
+    for (var i = 0, len = cookieParams.length; i < len; i++) {
+        cookieParam = cookieParams[i].match(equalsSplit);
+        if (cookieParam !== null && cookieParam.length) {
+            var attr = cookieParam[1].toLowerCase();
+            if (typeof cookie[attr] !== "undefined")
+                cookie[attr] = typeof cookieParam[2] === "string" ? cookieParam[2] : true;
+        }
+    }
+
+    /*  special post-processing for expire date  */
+    if (typeof cookie.expires === "string")
+        cookie.expires = new Date(cookie.expires);
+
+    return cookie;
+};
+
+/*  generate "Set-Cookie"-style header value  */
+HttpLayer.build_cookie = function( cookie ) {
+    var str = cookie.name + "=" + cookie.value;
+    str += "; Domain=" + cookie.domain;
+    str += "; Path=" + cookie.path;
+    str += "; Expires=" + cookie.expires;
+    if ( cookie.secure ) str += "; Secure";
+    if ( cookie.httponly ) str += "; HttpOnly";
+    return str;
 };
 
 HttpLayer[PROTO] = {

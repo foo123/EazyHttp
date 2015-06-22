@@ -6,41 +6,6 @@
 **/
 if ( !class_exists('HttpLayer') )
 {
-class HttpCookie
-{
-    public $name = null;
-    public $value = null;
-    public $expires = null;
-    public $domain = null;
-    
-    public function __construct($cookie, $value=null, $expires=null, $domain=null)
-    {
-        if ( is_array($cookie) || is_object($cookie) )
-        {
-            $cookie = (array)$cookie;
-            $this->name = isset($cookie['name']) ? $cookie['name'] : '';
-            $this->value = isset($cookie['value']) ? $cookie['value'] : '';
-            $this->expires = isset($cookie['expires']) ? $cookie['expires'] : '';
-            $this->domain = isset($cookie['domain']) ? $cookie['domain'] : '';
-        }
-        else
-        {
-            $this->name = !empty($cookie) ? $cookie : '';
-            $this->value = !empty($value) ? $value : '';
-            $this->expires = !empty($expires) ? $expires : '';
-            $this->domain = !empty($domain) ? $domain : '';
-        }
-    }
-    
-    public function dispose( )
-    {
-        $this->name = null;
-        $this->value = null;
-        $this->expires = null;
-        $this->domain = null;
-    }
-}
-
 class HttpLayer
 {
     const HTTP_REQUEST = 1;
@@ -68,7 +33,7 @@ class HttpLayer
     }
 
     // parse and extract uri components and optional query/fragment params
-    public static function parse( $s, $query_p='query_params', $fragment_p='fragment_params' ) 
+    public static function parse_url( $s, $query_p='query_params', $fragment_p='fragment_params' ) 
     {
         $COMPONENTS = array( );
         if ( $s )
@@ -94,7 +59,7 @@ class HttpLayer
     }
 
     // build a url from baseUrl plus query/hash params
-    public static function build( $baseUrl, $query=null, $hash=null, $q='?', $h='#' ) 
+    public static function build_url( $baseUrl, $query=null, $hash=null, $q='?', $h='#' ) 
     {
         $url = '' . $baseUrl;
         if ( $query )  $url .= $q . self::glue( $query );
@@ -102,6 +67,68 @@ class HttpLayer
         return $url;
     }
         
+    // parse and extract headers from header_str
+    public static function parse_headers( $s ) 
+    {
+        $headers = array( );
+        $key = null;
+        if ( $s && strlen($s) )
+        {
+            $lines = preg_split("/(\r\n)|\r|\n/", $s);
+            foreach ($lines as $line)
+            {
+                $parts = explode(":", $line);
+                if ( isset($parts[1]) )
+                {
+                    $key = trim(array_shift($parts));
+                    $headers[$key] = implode(":", $parts);
+                }
+                elseif ($key)
+                {
+                    $headers[$key] .= "\r\n" . $parts[0];
+                }
+            }
+        }
+        return $headers;
+    }
+
+    public static function build_headers( $headers ) 
+    {
+        $header = '';
+        return $header;
+    }
+
+    // parse and extract cookie obj from string
+    public static function parse_cookie( $s ) 
+    {
+        $headers = array( );
+        $key = null;
+        if ( $s && strlen($s) )
+        {
+            $lines = preg_split("/(\r\n)|\r|\n/", $s);
+            foreach ($lines as $line)
+            {
+                $parts = explode(":", $line);
+                if ( isset($parts[1]) )
+                {
+                    $key = trim(array_shift($parts));
+                    $headers[$key] = implode(":", $parts);
+                }
+                elseif ($key)
+                {
+                    $headers[$key] .= "\r\n" . $parts[0];
+                }
+            }
+        }
+        return $headers;
+    }
+
+    public static function build_cookie( $cookie ) 
+    {
+        $str = '';
+        return $str;
+    }
+
     private static function request_http( $url, $options )
     {
         $method = $options['method'];
