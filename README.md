@@ -1,4 +1,4 @@
 HttpLayer
 ===========
 
-Http Request/Response for PHP, Python, Node/JS, ActionScript (**in progress do not use**)
+Simple and uniform API for Http (Request/Response) Layer for PHP, Python, Node/JS (**in progress do not use**)
