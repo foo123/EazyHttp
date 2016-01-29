@@ -1,12 +1,12 @@
 <?php
 /**
-*    HttpLayer
-*    A simple http-request class for PHP, Python, Node/JS
-*    https://github.com/foo123/HttpLayer
+*    Http
+*    http utilities class for PHP, Python, Node/XPCOM/JS
+*    https://github.com/foo123/Http
 **/
-if ( !class_exists('HttpLayer') )
+if ( !class_exists('Http') )
 {
-class HttpLayer
+class Http
 {
     const HTTP_REQUEST = 1;
     const CURL = 2;
@@ -290,5 +290,5 @@ class HttpLayer
         return $this->request($url, $options);
     }
 }
-HttpLayer::init( );
+Http::init( );
 }

@@ -1,30 +1,22 @@
 /**
-*    HttpLayer
-*    A simple http-request class for PHP, Python, Node/JS
-*    https://github.com/foo123/HttpLayer
+*    Http
+*    http utilities class for PHP, Python, Node/XPCOM/JS
+*    https://github.com/foo123/Http
 **/
 !function( root, name, factory ) {
 "use strict";
-
-// export the module, umd-style (no other dependencies)
-var isCommonJS = ("object" === typeof(module)) && module.exports, 
-    isAMD = ("function" === typeof(define)) && define.amd, m;
-
-// CommonJS, node, etc..
-if ( isCommonJS ) 
-    module.exports = (module.$deps = module.$deps || {})[ name ] = module.$deps[ name ] || (factory.call( root, {NODE:module} ) || 1);
-
-// AMD, requireJS, etc..
-else if ( isAMD && ("function" === typeof(require)) && ("function" === typeof(require.specified)) && require.specified(name) ) 
-    define( name, ['require', 'exports', 'module'], function( require, exports, module ){ return factory.call( root, {AMD:module} ); } );
-
-// browser, web worker, etc.. + AMD, other loaders
-else if ( !(name in root) ) 
-    (root[ name ] = (m=factory.call( root, {} ) || 1)) && isAMD && define( name, [], function( ){ return m; } );
-
+var m;
+if ( ('undefined'!==typeof Components)&&('object'===typeof Components.classes)&&('object'===typeof Components.classesByID)&&Components.utils&&('function'===typeof Components.utils['import']) ) /* XPCOM */
+    (root.EXPORTED_SYMBOLS = [ name ]) && (root[ name ] = factory.call( root ));
+else if ( ('object'===typeof module)&&module.exports ) /* CommonJS */
+    module.exports = factory.call( root );
+else if ( ('function'===typeof(define))&&define.amd&&('function'===typeof(require))&&('function'===typeof(require.specified))&&require.specified(name) ) /* AMD */
+    define(name,['require','exports','module'],function( ){return factory.call( root );});
+else if ( !(name in root) ) /* Browser/WebWorker/.. */
+    (root[ name ] = (m=factory.call( root )))&&('function'===typeof(define))&&define.amd&&define(function( ){return m;} );
 }(  /* current root */          this, 
-    /* module name */           "Dromeo",
-    /* module factory */        function( exports, undef ) {
+    /* module name */           "Http",
+    /* module factory */        function( undef ) {
 "use strict";
 
 var PROTO = "prototype", HAS = "hasOwnProperty",
@@ -33,7 +25,7 @@ var PROTO = "prototype", HAS = "hasOwnProperty",
     
     __id = 0,
     
-    xFormData, FormSerializer, HttpLayer,
+    xFormData, FormSerializer, Http,
     
     is_array = function( o ) { return ('[object Array]' === toString.call(o)) || (o instanceof Array); },
     is_obj = function( o ) { return ('[object Object]' === toString.call(o)) || (o instanceof Object); },
@@ -741,29 +733,29 @@ else
     xFormData = FormData;
 }
 
-HttpLayer = function HttpLayer( ){ };
+Http = function Http( ){ };
 
 // build/glue together a uri component from a params object
-HttpLayer.glue = glue;
+Http.glue = glue;
 // unglue/extract params object from uri component
-HttpLayer.unglue = unglue;
+Http.unglue = unglue;
 // parse and extract uri components and optional query/fragment params
-HttpLayer.parse_url = parse_url;
+Http.parse_url = parse_url;
 // build a url from baseUrl plus query/hash params
-HttpLayer.build_url = build_url;
+Http.build_url = build_url;
 // parse and extract headers from header_str
-HttpLayer.parse_headers = parse_headers;
+Http.parse_headers = parse_headers;
 // parse and extract headers from header_str
-HttpLayer.build_headers = build_headers;
+Http.build_headers = build_headers;
 /*  parse a "Set-Cookie"-style header value  */
-HttpLayer.parse_cookie = parse_cookie;
+Http.parse_cookie = parse_cookie;
 /*  generate "Set-Cookie"-style header value  */
-HttpLayer.build_cookie = build_cookie;
+Http.build_cookie = build_cookie;
 
-HttpLayer.FormData = xFormData;
+Http.FormData = xFormData;
 
-HttpLayer[PROTO] = {
-    constructor: HttpLayer,
+Http[PROTO] = {
+    constructor: Http,
     
     headers: null,
     cookies: null,
@@ -843,5 +835,5 @@ HttpLayer[PROTO] = {
 };
 
 // export it
-return HttpLayer;
+return Http;
 });
