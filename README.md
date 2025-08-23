@@ -1,7 +1,7 @@
-Http
-===========
+EazyHttp
+=========
 
-Http utilities module (incl. `request`, `response`, `headers`, `cookies`, `xhr`, `formData`) for PHP, Python, Javascript
+EazyHttp, easy, simple and fast HTTP requests for PHP, JavaScript, Python
 
 (**in progress do not use**)
 

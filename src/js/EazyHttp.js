@@ -1,6 +1,6 @@
 /**
 *    EazyHttp
-*    simple and fast HTPP requests for PHP, Python, JavaScript
+*    easy, simple and fast HTTP requests for PHP, JavaScript, Python
 *    https://github.com/foo123/EazyHttp
 **/
 !function( root, name, factory ) {
@@ -25,7 +25,7 @@ var PROTO = "prototype", HAS = Object[PROTO].hasOwnProperty,
     
     __id = 0,
     
-    xFormData, FormSerializer, EazyHttp,
+    xFormData, FormSerializer, EazyHttp, VERSION = '0.1.0',
     
     is_array = function(o) {return ('[object Array]' === toString.call(o)) || (o instanceof Array);},
     is_obj = function(o) {return ('[object Object]' === toString.call(o)) || (o instanceof Object);},
@@ -837,5 +837,6 @@ EazyHttp[PROTO] = {
 };
 
 // export it
+EazyHttp.VERSION = VERSION;
 return EazyHttp;
 });
