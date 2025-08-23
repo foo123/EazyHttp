@@ -1,7 +1,7 @@
 /**
-*    Http
-*    http utilities class for PHP, Python, Node/XPCOM/JS
-*    https://github.com/foo123/Http
+*    EazyHttp
+*    simple and fast HTPP requests for PHP, Python, JavaScript
+*    https://github.com/foo123/EazyHttp
 **/
 !function( root, name, factory ) {
 "use strict";
@@ -15,37 +15,37 @@ else if ( ('function'===typeof(define))&&define.amd&&('function'===typeof(requir
 else if ( !(name in root) ) /* Browser/WebWorker/.. */
     (root[ name ] = (m=factory.call( root )))&&('function'===typeof(define))&&define.amd&&define(function( ){return m;} );
 }(  /* current root */          'undefined' !== typeof self ? self : this, 
-    /* module name */           "Http",
-    /* module factory */        function( undef ) {
+    /* module name */           "EazyHttp",
+    /* module factory */        function(undef) {
 "use strict";
 
-var PROTO = "prototype", HAS = "hasOwnProperty",
+var PROTO = "prototype", HAS = Object[PROTO].hasOwnProperty,
     toString = Object[PROTO].toString, Keys = Object.keys,
     isNode = 'undefined' !== global && '[object Global]' === toString.call(global),
     
     __id = 0,
     
-    xFormData, FormSerializer, Http,
+    xFormData, FormSerializer, EazyHttp,
     
-    is_array = function( o ) { return ('[object Array]' === toString.call(o)) || (o instanceof Array); },
-    is_obj = function( o ) { return ('[object Object]' === toString.call(o)) || (o instanceof Object); },
-    is_string = function( o ) { return ('[object String]' === toString.call(o)) || (o instanceof String); },
-    is_number = function( o ) { return ('number' === typeof(o)) || (o instanceof Number); },
-    is_callable = function( o ) { return ('[object Function]' === toString.call(o)) || (o instanceof Function); },
+    is_array = function(o) {return ('[object Array]' === toString.call(o)) || (o instanceof Array);},
+    is_obj = function(o) {return ('[object Object]' === toString.call(o)) || (o instanceof Object);},
+    is_string = function(o) {return ('[object String]' === toString.call(o)) || (o instanceof String);},
+    is_number = function(o) {return ('number' === typeof(o)) || (o instanceof Number);},
+    is_callable = function(o) {return ('[object Function]' === toString.call(o)) || (o instanceof Function);},
     
-    extend = function( o1, o2, deep ) {
+    extend = function(o1, o2, deep) {
         var k, v;
         deep = true === deep;
-        if ( o2 )
+        if (o2)
         {
-            for ( k in o2 )
+            for (k in o2)
             {
-                if ( !o2[HAS](k) ) continue;
+                if (!HAS.call(o2,k)) continue;
                 v = o2[k];
-                if ( is_number(v) ) o1[k] = 0+v;
-                else if ( is_string(v) ) o1[k] = v.slice();
-                else if ( is_array(v) ) o1[k] = deep ? extend(v.length ? new Array(v.length) : [], v, deep) : v;
-                else if ( is_obj(v) ) o1[k] = deep ? extend({}, v, deep) : v;
+                if (is_number(v)) o1[k] = 0+v;
+                else if (is_string(v)) o1[k] = v.slice();
+                else if (is_array(v)) o1[k] = deep ? extend(v.length ? new Array(v.length) : [], v, deep) : v;
+                else if (is_obj(v)) o1[k] = deep ? extend({}, v, deep) : v;
                 else o1[k] = v;
             }
         }
@@ -53,21 +53,21 @@ var PROTO = "prototype", HAS = "hasOwnProperty",
     },
     
     trim = String[PROTO].trim 
-        ? function( s ) { return s.trim( ); }
-        : function( s ) { return s.replace(/^\s+|\s+$/g, ''); },
-    toBase64 = function toBase64( str ) {
+        ? function(s) {return s.trim();}
+        : function(s) {return s.replace(/^\s+|\s+$/g, '');},
+    toBase64 = function toBase64(str) {
         return (new Buffer(str || "", "ascii")).toString("base64");
     },
     json_encode = JSON.stringify, json_decode = JSON.parse,
     base64_encode = btoa, base64_decode = atob,
     
-    uuid = function uuid( namespace ) {
+    uuid = function uuid(namespace) {
         return [namespace||'uuid', ++__id, new Date().getTime()].join('_');
     },
     
     http = isNode 
         ? require('http') 
-        : ("undefined" !== typeof XMLHttpRequest ? XMLHttpRequest : function(){ return new ActiveXObject("Microsoft.XMLHTTP");}),
+        : ("undefined" !== typeof XMLHttpRequest ? function() {return new XMLHttpRequest();} : function() {return new ActiveXObject("Microsoft.XMLHTTP");}),
     
     // adapted from https://github.com/kvz/phpjs
     uriParser = {
@@ -78,18 +78,18 @@ var PROTO = "prototype", HAS = "hasOwnProperty",
     uriComponent = ['source', 'scheme', 'authority', 'userInfo', 'user', 'pass', 'host', 'port',
         'relative', 'path', 'directory', 'file', 'query', 'fragment'],
     parse_url = function(s, component, mode/*, queryKey*/) {
-        var m = uriParser[mode || 'php'].exec( s ),
-            uri = { }, i = 14//, parser, name
+        var m = uriParser[mode || 'php'].exec(s),
+            uri = {}, i = 14//, parser, name
         ;
-        while ( i-- ) 
+        while (i--) 
         {
-            if ( m[ i ] )  uri[ uriComponent[ i ] ] = m[ i ]
+            if (m[i])  uri[uriComponent[i]] = m[i]
         }
-        if ( uri[HAS]('port') ) uri['port'] = parseInt(uri['port'], 10);
+        if (HAS.call(uri,'port')) uri['port'] = parseInt(uri['port'], 10);
         
-        if ( component ) 
+        if (component) 
         {
-            return uri[ component.replace('PHP_URL_', '').toLowerCase( ) ] || null;
+            return uri[component.replace('PHP_URL_', '').toLowerCase( )] || null;
         }
         
         /*if ( 'php' !== mode )
@@ -101,14 +101,14 @@ var PROTO = "prototype", HAS = "hasOwnProperty",
                 if ($1) {uri[name][$1] = $2;}
             });
         }*/
-        if ( uri.source ) delete uri.source;
+        if (uri.source) delete uri.source;
         return uri;
     },
-    rawurldecode = function( str ){
-        return decodeURIComponent( ''+str );
+    rawurldecode = function(str) {
+        return decodeURIComponent(String(str));
     },
-    rawurlencode = function( str ) {
-        return encodeURIComponent( ''+str )
+    rawurlencode = function(str) {
+        return encodeURIComponent(String(str))
             .split('!').join('%21')
             .split("'").join('%27')
             .split('(').join('%28')
@@ -117,87 +117,87 @@ var PROTO = "prototype", HAS = "hasOwnProperty",
             //.split('~').join('%7E')
         ;        
     },
-    urldecode = function( str ) { 
-        return rawurldecode( ('' + str).split('+').join('%20') ); 
+    urldecode = function(str) { 
+        return rawurldecode(String(str).split('+').join('%20')); 
     },
-    urlencode = function( str ) {
-        return rawurlencode( str ).split('%20').join('+');
+    urlencode = function(str) {
+        return rawurlencode(str).split('%20').join('+');
     },
-    parse_str = function( str ) {
+    parse_str = function(str) {
         var strArr = str.replace(/^&/, '').replace(/&$/, '').split('&'),
             sal = strArr.length,
             i, j, ct, p, lastObj, obj, chr, tmp, key, value,
             postLeftBracketPos, keys, keysLen,
-            array = { }
+            array = {}
         ;
 
-        for (i=0; i<sal; i++) 
+        for (i=0; i<sal; ++i) 
         {
-            tmp = strArr[ i ].split( '=' );
-            key = rawurldecode( trim(tmp[0]) );
-            value = (tmp.length < 2) ? '' : rawurldecode( trim(tmp[1]) );
+            tmp = strArr[i].split('=');
+            key = rawurldecode(trim(tmp[0]));
+            value = (tmp.length < 2) ? '' : rawurldecode(trim(tmp[1]));
 
             j = key.indexOf('\x00');
-            if ( j > -1 ) key = key.slice(0, j);
+            if (j > -1) key = key.slice(0, j);
                 
-            if ( key && '[' !== key.charAt(0) ) 
+            if (key && '[' !== key.charAt(0)) 
             {
-                keys = [ ];
+                keys = [];
                 
                 postLeftBracketPos = 0;
-                for (j=0; j<key.length; j++) 
+                for (j=0; j<key.length; ++j) 
                 {
-                    if ( '[' === key.charAt(j)  && !postLeftBracketPos ) 
+                    if ('[' === key.charAt(j)  && !postLeftBracketPos) 
                     {
                         postLeftBracketPos = j + 1;
                     }
-                    else if ( ']' === key.charAt(j) ) 
+                    else if (']' === key.charAt(j)) 
                     {
-                        if ( postLeftBracketPos ) 
+                        if (postLeftBracketPos) 
                         {
-                            if ( !keys.length ) 
+                            if (!keys.length) 
                             {
-                                keys.push( key.slice(0, postLeftBracketPos - 1) );
+                                keys.push(key.slice(0, postLeftBracketPos - 1));
                             }
-                            keys.push( key.substr(postLeftBracketPos, j - postLeftBracketPos) );
+                            keys.push(key.substr(postLeftBracketPos, j - postLeftBracketPos));
                             postLeftBracketPos = 0;
-                            if ( '[' !== key.charAt(j + 1) ) break;
+                            if ('[' !== key.charAt(j + 1)) break;
                         }
                     }
                 }
                 
-                if ( !keys.length ) keys = [ key ];
+                if (!keys.length) keys = [key];
                 
-                for (j=0; j<keys[0].length; j++) 
+                for (j=0; j<keys[0].length; ++j) 
                 {
                     chr = keys[0].charAt(j);
-                    if ( ' ' === chr || '.' === chr || '[' === chr ) 
+                    if (' ' === chr || '.' === chr || '[' === chr) 
                     {
                         keys[0] = keys[0].substr(0, j) + '_' + keys[0].substr(j + 1);
                     }
-                    if ( '[' === chr ) break;
+                    if ('[' === chr) break;
                 }
 
                 obj = array;
-                for (j=0, keysLen=keys.length; j<keysLen; j++) 
+                for (j=0, keysLen=keys.length; j<keysLen; ++j) 
                 {
-                    key = keys[ j ].replace(/^['"]/, '').replace(/['"]$/, '');
+                    key = keys[j].replace(/^['"]/, '').replace(/['"]$/, '');
                     lastObj = obj;
                     
-                    if ( ('' !== key && ' ' !== key) || 0 === j ) 
+                    if (('' !== key && ' ' !== key) || 0 === j) 
                     {
-                        if ( undef === obj[key] ) obj[key] = { };
-                        obj = obj[ key ];
+                        if (undef === obj[key]) obj[key] = {};
+                        obj = obj[key];
                     }
                     else 
                     { 
                         // To insert new dimension
                         ct = -1;
-                        for ( p in obj ) 
+                        for (p in obj) 
                         {
-                            if ( obj[HAS](p) ) 
+                            if (HAS.call(obj,p)) 
                             {
-                                if ( +p > ct && p.match(/^\d+$/g) ) 
+                                if (+p > ct && p.match(/^\d+$/g)) 
                                 {
                                     ct = +p;
                                 }
@@ -206,32 +206,32 @@ var PROTO = "prototype", HAS = "hasOwnProperty",
                         key = ct + 1;
                     }
                 }
-                lastObj[ key ] = value;
+                lastObj[key] = value;
             }
         }
         return array;
     },
     
     // adapted from https://github.com/kvz/phpjs
-    http_build_query_helper = function( key, val, arg_separator, PHP_QUERY_RFC3986 ) {
+    http_build_query_helper = function(key, val, arg_separator, PHP_QUERY_RFC3986) {
         var k, tmp, encode = PHP_QUERY_RFC3986 ? rawurlencode : urlencode;
         
-        if ( true === val ) val = "1";
-        else if ( false === val ) val = "0";
+        if (true === val) val = "1";
+        else if (false === val) val = "0";
         
-        if ( null != val ) 
+        if (null != val) 
         {
-            if ( "object" === typeof(val) ) 
+            if ("object" === typeof(val)) 
             {
-                tmp = [ ];
-                for ( k in val ) 
+                tmp = [];
+                for (k in val) 
                 {
-                    if ( val[HAS](k) && null != val[k] ) 
+                    if (HAS.call(val,k) && null != val[k]) 
                     {
-                        tmp.push( http_build_query_helper(key + "[" + k + "]", val[k], arg_separator, PHP_QUERY_RFC3986) );
+                        tmp.push(http_build_query_helper(key + "[" + k + "]", val[k], arg_separator, PHP_QUERY_RFC3986));
                     }
                 }
-                return tmp.join( arg_separator );
+                return tmp.join(arg_separator);
             } 
             else
             {
@@ -243,21 +243,21 @@ var PROTO = "prototype", HAS = "hasOwnProperty",
             return '';
         }
     },
-    http_build_query = function http_build_query( data, arg_separator, PHP_QUERY_RFC3986 ) {
-        var value, key, query, tmp = [ ];
+    http_build_query = function http_build_query(data, arg_separator, PHP_QUERY_RFC3986) {
+        var value, key, query, tmp = [];
 
-        if ( arguments.length < 2 ) arg_separator = "&";
-        if ( arguments.length < 3 ) PHP_QUERY_RFC3986 = false;
+        if (arguments.length < 2) arg_separator = "&";
+        if (arguments.length < 3) PHP_QUERY_RFC3986 = false;
         
-        for ( key in data ) 
+        for (key in data) 
         {
-            if ( !data[HAS](key) ) continue;
-            value = data[ key ];
+            if (!HAS.call(data,key)) continue;
+            value = data[key];
             query = http_build_query_helper(key, value, arg_separator, PHP_QUERY_RFC3986);
-            if ( '' != query ) tmp.push( query );
+            if ('' != query) tmp.push(query);
         }
 
-        return tmp.join( arg_separator );
+        return tmp.join(arg_separator);
     }, 
 
     // adapted from https://github.com/rse/node-xmlhttprequest-cookie
@@ -267,7 +267,7 @@ var PROTO = "prototype", HAS = "hasOwnProperty",
     //  - Set-Cookie: LSID=DQAAAK…Eaem_vYg; Domain=docs.foo.com; Path=/accounts; Expires=Wed, 13 Jan 2021 22:23:01 GMT; Secure; HttpOnly
     //  - Cookie: LSID=DQAAAK…Eaem_vYg; FOO=bArBaz
     http_cookie = function http_cookie(name, value, domain, path, expires, secure, httponly) {
-        if ( is_obj(name) )
+        if (is_obj(name))
         {
             return extend({
              name     : ""
@@ -291,70 +291,70 @@ var PROTO = "prototype", HAS = "hasOwnProperty",
     },
     
     // build/glue together a uri component from a params object
-    glue = function glue( params ) {
+    glue = function glue(params) {
         var component = '';
         // http://php.net/manual/en/function.http-build-query.php
-        if ( params )  component += http_build_query( params, '&', true );
+        if (params)  component += http_build_query(params, '&', true);
         return component;
     },
 
     // unglue/extract params object from uri component
-    unglue = function unglue( s ) {
-        var PARAMS = s ? parse_str( s ) : { };
+    unglue = function unglue(s) {
+        var PARAMS = s ? parse_str(s) : {};
         return PARAMS;
     },
 
     // parse and extract uri components and optional query/fragment params
-    parse_url = function parse_url( s, query_p, fragment_p ) {
-        var COMPONENTS = { };
-        if ( s )
+    parse_url = function parse_url(s, query_p, fragment_p) {
+        var COMPONENTS = {};
+        if (s)
         {
-            if ( arguments.length < 3 ) fragment_p = 'fragment_params';
-            if ( arguments.length < 2 ) query_p = 'query_params';
+            if (arguments.length < 3) fragment_p = 'fragment_params';
+            if (arguments.length < 2) query_p = 'query_params';
             
-            COMPONENTS = parse_url( s );
+            COMPONENTS = parse_url(s);
             
-            if ( query_p ) 
+            if (query_p) 
             {
-                if ( COMPONENTS[ 'query' ] ) 
-                    COMPONENTS[ query_p ] = unglue( COMPONENTS[ 'query' ] );
+                if (COMPONENTS['query']) 
+                    COMPONENTS[query_p] = unglue(COMPONENTS['query']);
                 else
-                    COMPONENTS[ query_p ] = { };
+                    COMPONENTS[query_p] = {};
             }
-            if ( fragment_p )
+            if (fragment_p)
             {
-                if ( COMPONENTS[ 'fragment' ] ) 
-                    COMPONENTS[ fragment_p ] = unglue( COMPONENTS[ 'fragment' ] );
+                if (COMPONENTS['fragment']) 
+                    COMPONENTS[fragment_p] = unglue(COMPONENTS['fragment']);
                 else
-                    COMPONENTS[ fragment_p ] = { };
+                    COMPONENTS[fragment_p] = {};
             }
         }
         return COMPONENTS;
     },
 
     // build a url from baseUrl plus query/hash params
-    build_url = function build_url( baseUrl, query, hash, q, h ) {
+    build_url = function build_url(baseUrl, query, hash, q, h) {
         var url = '' + baseUrl;
-        if ( arguments.length < 5 ) h = '#';
-        if ( arguments.length < 4 ) q = '?';
-        if ( query )  url += q + glue( query );
-        if ( hash )  url += h + glue( hash );
+        if (arguments.length < 5) h = '#';
+        if (arguments.length < 4) q = '?';
+        if (query)  url += q + glue(query);
+        if (hash)  url += h + glue(hash);
         return url;
     },
 
     // parse and extract headers from header_str
-    parse_headers = function parse_headers( s ) {
-        var headers = { },
+    parse_headers = function parse_headers(s) {
+        var headers = {},
             key = null, lines, parts, i, l, line;
-        if ( s && s.length )
+        if (s && s.length)
         {
             lines = s.split(/(\r\n)|\r|\n/g);
             l = lines.length;
-            for (i=0; i<l; i++)
+            for (i=0; i<l; ++i)
             {
                 line = lines[i];
                 parts = line.split(":");
-                if ( parts.length > 1 )
+                if (parts.length > 1)
                 {
                     key = trim(parts.shift());
                     headers[key] = parts.join(":");
@@ -369,16 +369,16 @@ var PROTO = "prototype", HAS = "hasOwnProperty",
     },
 
     // parse and extract headers from header_str
-    build_headers = function build_headers( headers ) {
+    build_headers = function build_headers(headers) {
         var header = '',
             key = null, lines, parts, i, l, line;
         lines = s.split(/(\r\n)|\r|\n/g);
         l = lines.length;
-        for (i=0; i<l; i++)
+        for (i=0; i<l; ++i)
         {
             line = lines[i];
             parts = line.split(":");
-            if ( parts.length > 1 )
+            if (parts.length > 1)
             {
                 key = trim(parts.shift());
                 headers[key] = parts.join(":");
@@ -392,14 +392,14 @@ var PROTO = "prototype", HAS = "hasOwnProperty",
     },
 
     /*  parse a "Set-Cookie"-style header value  */
-    parse_cookie = function parse_cookie( cookieString, url ) {
+    parse_cookie = function parse_cookie(cookieString, url) {
         /*  generate new cookie and initialize it according to the URL  */
-        var cookie = http_cookie( );
+        var cookie = http_cookie();
 
         /*  optionally initialize for a particular URL  */
-        if ( "undefined" !== typeof url ) 
+        if ("undefined" !== typeof url) 
         {
-            if ( "string" === typeof url ) url = parse_url( url, false, false );
+            if ("string" === typeof url) url = parse_url(url, false, false);
             cookie.domain = url.host;
             cookie.path   = url.path;
         }
@@ -414,9 +414,11 @@ var PROTO = "prototype", HAS = "hasOwnProperty",
         cookie.value = cookieParam[2];
 
         /*  parse remaining attributes  */
-        for (var i = 0, len = cookieParams.length; i < len; i++) {
+        for (var i = 0, len = cookieParams.length; i < len; ++i)
+        {
             cookieParam = cookieParams[i].match(equalsSplit);
-            if (cookieParam !== null && cookieParam.length) {
+            if (cookieParam != null && cookieParam.length)
+            {
                 var attr = cookieParam[1].toLowerCase();
                 if (typeof cookie[attr] !== "undefined")
                     cookie[attr] = typeof cookieParam[2] === "string" ? cookieParam[2] : true;
@@ -431,38 +433,38 @@ var PROTO = "prototype", HAS = "hasOwnProperty",
     },
 
     /*  generate "Set-Cookie"-style header value  */
-    build_cookie = function build_cookie( cookie ) {
+    build_cookie = function build_cookie(cookie) {
         var str = cookie.name + "=" + cookie.value;
         str += "; Domain=" + cookie.domain;
         str += "; Path=" + cookie.path;
         str += "; Expires=" + cookie.expires;
-        if ( cookie.secure ) str += "; Secure";
-        if ( cookie.httponly ) str += "; HttpOnly";
+        if (cookie.secure) str += "; Secure";
+        if (cookie.httponly) str += "; HttpOnly";
         return str;
     },
     
-    parse_form = function parse_form( form, formData ) {
+    parse_form = function parse_form(form, formData) {
         var data = formData && formData instanceof xFormData ? formData : new xFormData();
         // https://developer.mozilla.org/en-US/docs/Web/API/HTMLFormElement/elements
-        if ( form && form.elements && form.elements.length )
+        if (form && form.elements && form.elements.length)
         {
             var i, l = form.elements.length, field, fieldtype, type, key, value;
-            for (i=0; i<l; i++)
+            for (i=0; i<l; ++i)
             {
                 field = form.elements[i];
-                fieldtype = field.nodeName.toLowerCase( );
+                fieldtype = field.nodeName.toLowerCase();
                 if ( !/input|textarea|select/.test(fieldtype) || 
                     field.disabled || 
                     !field.name || 
                     !field.name.length ) continue;
-                type = field.type.toLowerCase( );
+                type = field.type.toLowerCase();
                 key = field.name;
                 value = null;
-                switch( fieldtype ) 
+                switch (fieldtype) 
                 {
                     case 'input':
                     case 'textarea':
-                        switch( type ) 
+                        switch (type) 
                         {
                             case 'radio':
                                 if (field.checked && "false" === field.value) 
@@ -507,16 +509,16 @@ var PROTO = "prototype", HAS = "hasOwnProperty",
                     case 'select':
                         var selected, options, i, l;
 
-                        if ( !field.multiple ) 
+                        if (!field.multiple) 
                         {
                             value = field.value;
                             break;
                         }
-                        selected = [ ];
-                        for (options = field.getElementsByTagName("option"), i = 0, l = options.length; i < l; i++)
+                        selected = [];
+                        for (options = field.getElementsByTagName("option"), i = 0, l = options.length; i < l; ++i)
                         {
-                            if ( options[i].selected ) 
-                                selected.push( options[i].value );
+                            if (options[i].selected) 
+                                selected.push(options[i].value);
                         }
 
                         value = selected;
@@ -525,27 +527,27 @@ var PROTO = "prototype", HAS = "hasOwnProperty",
                     default:
                         break;
                 }
-                if ( null === value ) continue;
+                if (null == value) continue;
             }
         }
         return data;
     },
     
-    form_encode = function form_encode( form, formData ) {
-        if ( form ) 
+    form_encode = function form_encode(form, formData) {
+        if (form) 
         {
-            if ( !isNode && form instanceof HTMLFormElement ) form = parse_form( form, formData );
+            if (!isNode && form instanceof HTMLFormElement) form = parse_form(form, formData);
             // "multipart/form-data"
-            if ( form instanceof xFormData ) return form.shim ? form.toString( ) : form;
+            if (form instanceof xFormData) return form.shim ? form.toString() : form;
             //'application/x-www-form-urlencoded; charset=utf-8'
-            if ( is_string( form ) ) return urlencode(form.toString( 'utf8' ));
-            else if ( is_obj( form ) || is_array( form ) ) return glue( form )/*.toString('utf8')*/;
+            if (is_string(form)) return urlencode(form.toString('utf8'));
+            else if (is_obj(form) || is_array(form) ) return glue(form)/*.toString('utf8')*/;
         }
         return '';
     },
     
     http_request = isNode 
-    ? function http_request( options, onComplete ) {
+    ? function http_request(options, onComplete) {
         var options = {
             host: 'example.com',
             port: 80,
@@ -554,50 +556,50 @@ var PROTO = "prototype", HAS = "hasOwnProperty",
 
         var headers = null, body = '';
         http
-            .request(options, function( response ) {
+            .request(options, function(response) {
                 headers = response.headers;
-                response.on('data', function( chunk ){
+                response.on('data', function(chunk) {
                     //do something with chunk
                     body += chunk;
                 });
-                response.on('end', function( ){
-                    onComplete( headers, body );
+                response.on('end', function() {
+                    onComplete(headers, body);
                 });
             })
-            .on("error", function(e){
+            .on("error", function(e) {
                 //console.log("Got error: " + e.message);
-                onComplete( e, null );
+                onComplete(e, null);
             })
         ;
     }
-    : function http_request( options, onComplete ) {
+    : function http_request(options, onComplete) {
         // https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest#getAllResponseHeaders%28%29
-        var xmlhttp = new http(), headers = null, body = '';
-        xmlhttp.onload = function( ) {
-            if ( 2 /*HEADERS_RECEIVED*/ === xmlhttp.readyState )
+        var xmlhttp = http(), headers = null, body = '';
+        xmlhttp.onload = function() {
+            if (2 /*HEADERS_RECEIVED*/ === xmlhttp.readyState)
             {
-                if ( 200 === xmlhttp.status ) 
+                if (200 === xmlhttp.status) 
                 {
-                    headers = parse_headers( xmlhttp.getAllResponseHeaders( ) );
+                    headers = parse_headers(xmlhttp.getAllResponseHeaders());
                 }
             }
-            else if  ( 3 /*LOADING*/ === xmlhttp.readyState ) { }
-            else if  ( 4 /*DONE*/ === xmlhttp.readyState )
+            else if  (3 /*LOADING*/ === xmlhttp.readyState) {}
+            else if  (4 /*DONE*/ === xmlhttp.readyState)
             {
-                if ( 200 === xmlhttp.status ) 
+                if (200 === xmlhttp.status) 
                 {
                     body = xmlhttp.responseText;
-                    onComplete( headers, body );
+                    onComplete(headers, body);
                 }
                 else
                 {                
-                    onComplete( new Error('Request failed'), null );
+                    onComplete(new Error('Request failed'), null);
                 }
             }
         };
         // https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/Synchronous_and_Asynchronous_Requests#Example.3A_using_a_timeout
-        xmlhttp.ontimeout = function( ) {
-            onComplete( new Error('Request timeout'), null );
+        xmlhttp.ontimeout = function() {
+            onComplete(new Error('Request timeout'), null);
         };
         xmlhttp.open(method, url, true /*,user,pass*/);  // 'true' makes the request asynchronous
         xmlhttp.timeout = options.timeout || 0;
@@ -605,15 +607,15 @@ var PROTO = "prototype", HAS = "hasOwnProperty",
     },
 ;
 
-if ( isNode || "undefined" === typeof FormData )
+if (isNode || "undefined" === typeof FormData)
 {
-    xFormData = function xFormData( form ) {
+    xFormData = function xFormData(form) {
         var self = this;
         self.shim = true;
         self.boundary = "--------FormDataBoundary" + base64_encode(uuid('FormData'));
-        self.fields = { };
-        if ( !isNode && form instanceof HTMLFormElement ) 
-            parse_form( form, self );
+        self.fields = {};
+        if (!isNode && form instanceof HTMLFormElement) 
+            parse_form(form, self);
     };
     xFormData[PROTO] = {
         constructor: xFormData,
@@ -621,38 +623,38 @@ if ( isNode || "undefined" === typeof FormData )
         boundary: null,
         fields: null,
         
-        dispose: function( ) {
+        dispose: function() {
             var self = this;
             self.boundary = null;
             self.fields = null;
             return self;
         },
         
-        delete: function( key, value ) {
+        delete: function(key, value) {
             var self = this, index;
-            if ( key && self.fields[HAS](key) )
+            if (key && HAS.call(self.fields,key))
             {
-                if ( arguments.length > 1 )
+                if (arguments.length > 1)
                 {
-                    index = self.fields[key].indexOf( value );
-                    if ( -1 < index ) self.fields[key].splice(index, 1);
+                    index = self.fields[key].indexOf(value);
+                    if (-1 < index) self.fields[key].splice(index, 1);
                 }
                 else
                 {
-                    delete self.fields[ key ];
+                    delete self.fields[key];
                 }
             }
             return self;
         },
         
-        has: function( key, value ) {
+        has: function(key, value) {
             var self = this, index;
-            if ( key && self.fields[HAS](key) )
+            if (key && HAS.call(self.fields,key))
             {
-                if ( arguments.length > 1 )
+                if (arguments.length > 1)
                 {
-                    index = self.fields[key].indexOf( value );
-                    return ( -1 < index );
+                    index = self.fields[key].indexOf(value);
+                    return (-1 < index);
                 }
                 else
                 {
@@ -662,35 +664,35 @@ if ( isNode || "undefined" === typeof FormData )
             return false;
         },
         
-        append: function( key, value ) {
+        append: function(key, value) {
             var self = this;
-            if ( !self.fields[HAS](key) ) self.fields[key] = is_array(value) ? value : [value];
-            else if ( is_array(value) ) self.fields[key] = self.fields[key].concat( value );
-            else self.fields[key].push( value );
+            if (!HAS.call(self.fields,key)) self.fields[key] = is_array(value) ? value : [value];
+            else if (is_array(value)) self.fields[key] = self.fields[key].concat(value);
+            else self.fields[key].push(value);
             return self;
         },
         
-        set: function( key, value ) {
+        set: function(key, value) {
             var self = this;
             self.fields[key] = is_array(value) ? value : [value];
             return self;
         },
         
-        get: function( key ) {
+        get: function(key) {
             var self = this;
-            if ( key && self.fields[HAS](key) && self.fields[key].length )
+            if (key && HAS.call(self.fields,key) && self.fields[key].length)
                 return self.fields[key][0];
             return undef;
         },
         
-        getAll: function( key ) {
+        getAll: function(key) {
             var self = this;
-            if ( key && self.fields[HAS](key) && self.fields[key].length )
+            if (key && HAS.call(self.fields,key) && self.fields[key].length)
                 return self.fields[key];
             return undef;
         },
         
-        toString: function( ) {
+        toString: function() {
             var self = this,
                 boundary = self.boundary,
                 fields = self.fields,
@@ -698,15 +700,15 @@ if ( isNode || "undefined" === typeof FormData )
                 f, fl, k, kl = keys.length, key, field, kfields,
                 ks, file,
                 body = "";
-            for (k=0; k<kl; k++)
+            for (k=0; k<kl; ++k)
             {
-                key = keys[ k ];
-                ks = key.toString( );
-                kfields = fields[ key ];
+                key = keys[k];
+                ks = key.toString();
+                kfields = fields[key];
                 fl = kfields.length;
-                for (f=0; f<fl; f++)
+                for (f=0; f<fl; ++f)
                 {
-                    field = kfields[ f ];
+                    field = kfields[f];
                     body += "--" + boundary + "\r\n";
                     // file upload
                     if (field.name /*|| field instanceof Blob*/) 
@@ -714,7 +716,7 @@ if ( isNode || "undefined" === typeof FormData )
                         file = field;
                         body += "Content-Disposition: form-data; name=\""+ ks +"\"; filename=\""+ file.name +"\"\r\n";
                         body += "Content-Type: "+ file.type +"\r\n\r\n";
-                        body += file.getAsBinary( ) + "\r\n";
+                        body += file.getAsBinary() + "\r\n";
                     } 
                     else 
                     {
@@ -733,35 +735,35 @@ else
     xFormData = FormData;
 }
 
-Http = function Http( ){ };
+EazyHttp = function EazyHttp() {};
 
 // build/glue together a uri component from a params object
-Http.glue = glue;
+EazyHttp.glue = glue;
 // unglue/extract params object from uri component
-Http.unglue = unglue;
+EazyHttp.unglue = unglue;
 // parse and extract uri components and optional query/fragment params
-Http.parse_url = parse_url;
+EazyHttp.parse_url = parse_url;
 // build a url from baseUrl plus query/hash params
-Http.build_url = build_url;
+EazyHttp.build_url = build_url;
 // parse and extract headers from header_str
-Http.parse_headers = parse_headers;
+EazyHttp.parse_headers = parse_headers;
 // parse and extract headers from header_str
-Http.build_headers = build_headers;
+EazyHttp.build_headers = build_headers;
 /*  parse a "Set-Cookie"-style header value  */
-Http.parse_cookie = parse_cookie;
+EazyHttp.parse_cookie = parse_cookie;
 /*  generate "Set-Cookie"-style header value  */
-Http.build_cookie = build_cookie;
+EazyHttp.build_cookie = build_cookie;
 
-Http.FormData = xFormData;
+EazyHttp.FormData = xFormData;
 
-Http[PROTO] = {
-    constructor: Http,
+EazyHttp[PROTO] = {
+    constructor: EazyHttp,
     
     headers: null,
     cookies: null,
     body: null,
     
-    dispose: function( ) {
+    dispose: function() {
         var self = this;
         self.headers = null;
         self.cookies = null;
@@ -769,16 +771,16 @@ Http[PROTO] = {
         return self;
     }
     
-    request: function( url, options )  {
+    request: function(url, options)  {
         var self = this, onLoad = null, onError = null;
-        if ( !url ) return;
-        if ( !options ) options = {};
-        if ( options[HAS]('onLoad') )
+        if (!url) return;
+        if (!options) options = {};
+        if (HAS.call(options,'onLoad'))
         {
             onLoad = is_callable(options.onLoad) ? options.onLoad : null;
             delete options.onLoad;
         }
-        if ( options[HAS]('onError') )
+        if (HAS.call(options,'onError'))
         {
             onError = is_callable(options.onError) ? options.onError : null;
             delete options.onError;
@@ -794,35 +796,35 @@ Http[PROTO] = {
             'data'      : {},
             'params'    : {}
         }, options);
-        options.method = options.method.toUpperCase( );
+        options.method = options.method.toUpperCase();
         options.port = parseInt(options.port, 10);
         
-        http_request( options, function( headers, body ){
-            if ( headers instanceof Error )
+        http_request(options, function(headers, body) {
+            if (headers instanceof Error)
             {
-                if ( onError ) onError( headers );
+                if (onError) onError(headers);
             }
             else
             {                
                 self.headers = headers;
                 self.cookies = {};
                 self.body = body;
-                if ( onLoad ) onLoad( self );
+                if (onLoad) onLoad(self);
             }
         });
     },
     
-    get: function( url, onLoad, onError ) {
+    get: function(url, onLoad, onError) {
         var self = this;
         var options = {
             'method'    : 'GET',
             'onLoad'    : onLoad,
             'onError'   : onError
         };
-        self.request( url, options );
+        self.request(url, options);
     },
     
-    post: function( url, data, onLoad, onError ) {
+    post: function(url, data, onLoad, onError) {
         var self = this;
         var options = array(
             'method'    : 'POST',
@@ -830,10 +832,10 @@ Http[PROTO] = {
             'onLoad'    : onLoad,
             'onError'   : onError
         );
-        self.request( url, options );
+        self.request(url, options);
     }
 };
 
 // export it
-return Http;
+return EazyHttp;
 });
