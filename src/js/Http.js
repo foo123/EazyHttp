@@ -14,7 +14,7 @@ else if ( ('function'===typeof(define))&&define.amd&&('function'===typeof(requir
     define(name,['require','exports','module'],function( ){return factory.call( root );});
 else if ( !(name in root) ) /* Browser/WebWorker/.. */
     (root[ name ] = (m=factory.call( root )))&&('function'===typeof(define))&&define.amd&&define(function( ){return m;} );
-}(  /* current root */          this, 
+}(  /* current root */          'undefined' !== typeof self ? self : this, 
     /* module name */           "Http",
     /* module factory */        function( undef ) {
 "use strict";
