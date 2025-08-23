@@ -4,7 +4,7 @@
 *    easy, simple and fast HTTP requests for PHP, JavaScript, Python
 *    https://github.com/foo123/EazyHttp
 **/
-if (!class_exists('EazyHttp'))
+if (!class_exists('EazyHttp', false))
 {
 class EazyHttp
 {
@@ -14,25 +14,25 @@ class EazyHttp
     {
     }
 
-    public function get($url, $data = array(), $headers = null, $cookies = null)
+    public function get($uri, $data = array(), $headers = null, $cookies = null)
     {
-        return $this->server_request('GET', $url, $data, $headers, $cookies);
+        return $this->server_request('GET', $uri, $data, $headers, $cookies);
     }
 
-    public function post($url, $data = array(), $headers = null, $cookies = null)
+    public function post($uri, $data = array(), $headers = null, $cookies = null)
     {
-        return $this->server_request('POST', $url, $data, $headers, $cookies);
+        return $this->server_request('POST', $uri, $data, $headers, $cookies);
     }
 
-    public function getClient($url, $data = array())
+    public function getClient($uri, $data = array())
     {
-        $this->client_request('GET', $url, $data);
+        $this->client_request('GET', $uri, $data);
         return null;
     }
 
-    public function postClient($url, $data = array())
+    public function postClient($uri, $data = array())
     {
-        $this->client_request('POST', $url, $data);
+        $this->client_request('POST', $uri, $data);
         return null;
     }
 
@@ -52,7 +52,7 @@ class EazyHttp
                 'client'            => false,
                 'follow_location'   => 1,
                 'max_redirects'     => 3,
-                'timeout'           => 20, // sec
+                'timeout'           => 40, // sec
             )
         );
         /*if (is_array($responseHeaders) && isset($responseHeaders['set-cookie']))
@@ -89,8 +89,8 @@ class EazyHttp
     {
         // TODO: support POST files ??
         // TODO: support more methods, eg PUT, DELETE, ..
-        $responseBody = '';
         $responseStatus = 0;
+        $responseBody = false;
         $responseHeaders = array();
         $responseCookies = array();
 
@@ -170,7 +170,7 @@ class EazyHttp
         return $this;
     }
 
-    public function datetime($time = null)
+    protected function datetime($time = null)
     {
         if (is_null($time)) $time = time();
         return gmdate('D, d M Y H:i:s', $time) . ' GMT';
