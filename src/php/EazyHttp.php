@@ -544,7 +544,7 @@ class EazyHttp
         {
             if ($toSet)
             {
-                $str .= 'deleted; expires='.gmdate('D, d M Y H:i:s T', time() - 31536001).'; Max-Age=0';
+                $str .= 'deleted; Expires='.gmdate('D, d M Y H:i:s T', time() - 31536001).'; Max-Age=0';
             }
             else
             {
@@ -558,7 +558,7 @@ class EazyHttp
             {
                 if (0 !== $cookie['expires'])
                 {
-                    $str .= '; expires='.gmdate('D, d M Y H:i:s T', $cookie['expires']).'; Max-Age='.max(0, $cookie['expires']-time());
+                    $str .= '; Expires='.gmdate('D, d M Y H:i:s T', $cookie['expires']).'; Max-Age='.max(0, $cookie['expires']-time());
                 }
             }
         }
@@ -567,32 +567,32 @@ class EazyHttp
         {
             if (isset($cookie['path']))
             {
-                $str .= '; path='.$cookie['path'];
+                $str .= '; Path='.$cookie['path'];
             }
 
             if (isset($cookie['domain']))
             {
-                $str .= '; domain='.$cookie['domain'];
+                $str .= '; Domain='.$cookie['domain'];
             }
 
             if (!empty($cookie['secure']))
             {
-                $str .= '; secure';
+                $str .= '; Secure';
             }
 
             if (!empty($cookie['httponly']))
             {
-                $str .= '; httponly';
+                $str .= '; HttpOnly';
             }
 
             if (isset($cookie['samesite']))
             {
-                $str .= '; samesite='.$cookie['samesite'];
+                $str .= '; SameSite='.$cookie['samesite'];
             }
 
             if (!empty($cookie['partitioned']))
             {
-                $str .= '; partitioned';
+                $str .= '; Partitioned';
             }
         }
 
