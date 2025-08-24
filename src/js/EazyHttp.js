@@ -17,34 +17,19 @@ else if (!(name in root)) /* Browser/WebWorker/.. */
   /* module factory */        function(undef) {
 "use strict";
 
-var VERSION = '0.1.0',  xFormData,
+var VERSION = '0.1.0',
 
-    PROTO = "prototype",
+    PROTO = 'prototype',
     HAS = Object[PROTO].hasOwnProperty,
     toString = Object[PROTO].toString,
-
-    isNode = ('undefined' !== typeof(global)) && ('[object Global]' === toString.call(global)),
-
-    http = isNode ? require('http') : ("undefined" !== typeof(XMLHttpRequest) ? function() {return new XMLHttpRequest();} : function() {return new ActiveXObject("Microsoft.XMLHTTP");}),
-
-    stdMath = Math, KEYS = Object.keys,
-
-    __id = 0,
-
-    uuid = function uuid(namespace) {
-        return [namespace||'uuid', ++__id, new Date().getTime()].join('_');
-    },
 
     trim = String[PROTO].trim
         ? function(s) {return s.trim();}
         : function(s) {return s.replace(/^\s+|\s+$/g, '');},
 
-    toBase64 = function toBase64(str) {
-        return (new Buffer(str || "", "ascii")).toString("base64");
-    },
+    isNode = ('undefined' !== typeof(global)) && ('[object Global]' === toString.call(global)),
 
-    json_encode = JSON.stringify, json_decode = JSON.parse,
-    base64_encode = btoa, base64_decode = atob
+    http = isNode ? require('http') : function() {return 'undefined' !== typeof(XMLHttpRequest) ? (new XMLHttpRequest()) : (new ActiveXObject('Microsoft.XMLHTTP'));}
 ;
 
 function EazyHttp()
@@ -54,240 +39,507 @@ EazyHttp[PROTO] = {
     constructor: EazyHttp,
 
     get: function(uri, data, headers, cookies, cb) {
-        return this._request('GET', uri, data, headers, cookies, cb);
+        return this._do_http('GET', uri, data, headers, cookies, cb);
     },
 
     post: function(uri, data, headers, cookies, cb) {
-        return this._request('POST', uri, data, headers, cookies, cb);
+        return this._do_http('POST', uri, data, headers, cookies, cb);
     },
 
-    _request: function(method, uri, data, headers, cookies, cb)  {
-        var self = this;
+    _do_http: function(method, uri, data, headers, cookies, cb)  {
+        var self = this, hs, name;
 
         method = String(method).toUpperCase();
         if ('POST' !== method) method = 'GET';
 
+        if (!headers || !is_obj(headers)) headers = {};
+        if (!cookies || !is_array(cookies)) cookies = [];
+
+        hs = headers; headers = {};
+        for (name in hs)
+        {
+            if (HAS.call(hs, name))
+            {
+                headers[ucwords(trim(name).toLowerCase())] = hs[name];
+            }
+        }
+        headers = extend({'User-Agent': 'EazyHttp', 'Accept': '*/*'}, headers);
+        if (('POST' === method) && !HAS.call(headers, 'Content-Type'))
+        {
+            headers['Content-Type'] = 'application/x-www-form-urlencoded';
+        }
         if (isNode)
         {
             self._do_http_server(
                 method,
-                uri,
-                requestBody,
-                requestHeaders,
-                requestCookies,
+                uri + (('GET' === method) && is_obj(data) ? ((-1 === uri.indexOf('?') ? '?' : '&') + http_build_query(data, '&')) : ''),
+                'POST' === method ? data : '',
+                headers,
+                cookies,
                 {
-                    'timeout': 30,
+                    'timeout'   : 30, // sec
                 },
-                function(err, status, content, headers, cookies) {
+                function(err, response) {
+                    if (is_callable(cb)) cb(err, response);
                 }
             );
         }
         else
         {
-            self._do_http_client(
+            self["undefined" !== typeof(fetch) ? '_do_http_fetch' : '_do_http_xhr'](
                 method,
-                uri,
-                requestBody,
-                requestHeaders,
-                requestCookies,
+                uri + (('GET' === method) && is_obj(data) ? ((-1 === uri.indexOf('?') ? '?' : '&') + http_build_query(data, '&')) : ''),
+                'POST' === method ? data : '',
+                headers,
+                cookies,
                 {
-                    'timeout': 30,
+                    'timeout'   : 30, // sec
+                    'redirect'  : 'follow'
                 },
-                function(err, status, content, headers, cookies) {
+                function(err, response) {
+                    if (is_callable(cb)) cb(err, response);
                 }
             );
         }
         return self;
     },
 
-    _do_http_server: function(method, uri, requestBody, requestHeaders, requestCookies, options, cb) {
-        var options = {
-            host: 'example.com',
-            port: 80,
-            path: '/foo.html'
-        };
+    _do_http_server: function(method, uri, data, headers, cookies, options, cb) {
+        var protocol, port, host, path, query;
 
-        var responseHeaders = null, responseBody = '';
-        http
-            .request(options, function(response) {
-                responseHeaders = response.headers;
-                response.on('data', function(chunk) {
-                    responseBody += chunk;
+        uri = parse_url(uri);
+        host = uri['host'];
+        if (!host || !host.length)
+        {
+            cb(new EazyHttpException('No host'), {
+                status  : 0,
+                content : false,
+                headers : {},
+                cookies : []
+            });
+            return;
+        }
+        protocol = HAS.call(uri, 'scheme') ? uri['scheme'].toLowerCase() : 'http';
+        port = HAS.call(uri, 'port') ? +uri['port'] : ('https' === protocol ? 443 : 80);
+        path = HAS.call(uri, 'path') ? uri['path'] : '/';
+        if (!path.length) path = '/';
+        path += HAS.call(uri, 'query') && uri['query'].length ? ('?' + uri['query']) : '';
+
+        var request = http.request({
+            'method'    : method,
+            'protocol'  : protocol,
+            'host'      : host,
+            'port'      : port,
+            'path'      : path,
+            'headers'   : format_http_cookies(cookies, headers),
+            'timeout'   : 1000*options.timeout // ms
+        });
+        request.on('response', function(response) {
+            var status = response.statusCode, content = '',
+                headers = parse_http_header(response.headers),
+                cookies = parse_http_cookies(headers);
+
+            response.on('data', function(chunk) {
+                content += chunk;
+            });
+            response.on('end', function() {
+                cb(null, {
+                    status  : status,
+                    content : content,
+                    headers : headers,
+                    cookies : cookies
+
                 });
-                response.on('end', function() {
-                    onComplete(responseHeaders, responseBody);
-                });
-            })
-            .on("error", function(e) {
-                onComplete(e, null);
-            })
-        ;
+            });
+        });
+        request.on('timeout', function() {
+            cb(new EazyHttpException('Request timeout after '+options.timeout+' secs'), {
+                status  : 0,
+                content : false,
+                headers : {},
+                cookies : []
+            });
+        });
+        request.on('error', function(err) {
+            cb(err, {
+                status  : 0,
+                content : false,
+                headers : {},
+                cookies : []
+            });
+        });
     },
 
-    _do_http_client: function(method, uri, requestBody, requestHeaders, requestCookies, options, cb) {
-        var xmlhttp = http(), headers = null, body = '';
-        xmlhttp.onload = function() {
-            if (2 /*HEADERS_RECEIVED*/ === xmlhttp.readyState)
+    _do_http_fetch: function(method, uri, data, headers, cookies, options, cb) {
+        var status;
+        fetch(uri, {
+            'method'    : method,
+            'headers'   : headers,
+            'body'      : format_data(method, data),
+            'redirect'  : options['redirect'],
+            'keepalive' : false
+        }).then(function(response){
+            status = response.status;
+            headers = parse_http_header(response.headers);
+            cookies = parse_http_cookies(headers);
+            return response.text();
+        }).then(function(content) {
+            cb(err, {
+                status  : status,
+                content : content,
+                headers : headers,
+                cookies : cookies
+            });
+        }).catch(function(err) {
+            cb(err, {
+                status  : 0,
+                content : false,
+                headers : {},
+                cookies : []
+            });
+        })
+    },
+
+    _do_http_xhr: function(method, uri, data, headers, cookies, options, cb) {
+        var xhr = http();
+        //xhr.onreadystatechange
+        // (2 /*HEADERS_RECEIVED*/ === xhr.readyState)
+        // (3 /*LOADING*/ === xhr.readyState)
+        // (4 /*DONE*/ === xhr.readyState)
+        xhr.ontimeout = function() {
+            cb(new EazyHttpException('Request timeout after '+options.timeout+' secs'), {
+                status  : 0,
+                content : false,
+                headers : {},
+                cookies : []
+            });
+        };
+        xhr.onerror = function(err) {
+            cb(err, {
+                status  : 0,
+                content : false,
+                headers : {},
+                cookies : []
+            });
+        };
+        xhr.onload = function() {
+            var headers = parse_http_header(xhr.getAllResponseHeaders()),
+                cookies = parse_http_cookies(headers);
+            cb(null, {
+                status  : xhr.status,
+                content : xhr.responseText,
+                headers : headers,
+                cookies : cookies
+            });
+        };
+        xhr.open(method, uri, true /*,user,pass*/);  // 'true' makes the request asynchronous
+        for (var name in headers)
+        {
+            if (HAS.call(headers, name))
             {
-                if (200 === xmlhttp.status)
-                {
-                    headers = parse_headers(xmlhttp.getAllResponseHeaders());
+                try {
+                xhr.setRequestHeader(name, headers[name]);
+                } catch (e) {
+                /*pass*/
                 }
             }
-            else if  (3 /*LOADING*/ === xmlhttp.readyState) {}
-            else if  (4 /*DONE*/ === xmlhttp.readyState)
-            {
-                if (200 === xmlhttp.status)
-                {
-                    body = xmlhttp.responseText;
-                    onComplete(headers, body);
-                }
-                else
-                {
-                    onComplete(new Error('Request failed'), null);
-                }
-            }
-        };
-        // https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/Synchronous_and_Asynchronous_Requests#Example.3A_using_a_timeout
-        xmlhttp.ontimeout = function() {
-            onComplete(new Error('Request timeout'), null);
-        };
-        xmlhttp.open(method, url, true /*,user,pass*/);  // 'true' makes the request asynchronous
-        xmlhttp.timeout = options.timeout || 0;
-        xmlhttp.send(requestBody);
+        }
+        xhr.timeout = 1000*options.timeout; // ms
+        xhr.send(format_data(method, data));
     }
 };
-
-if (isNode || ("undefined" === typeof FormData))
+function EazyHttpException(message)
 {
-    xFormData = function xFormData(form) {
-        var self = this;
-        self.shim = true;
-        self.boundary = "--------FormDataBoundary" + base64_encode(uuid('FormData'));
-        self.fields = {};
-        if (!isNode && form instanceof HTMLFormElement)
-            parse_form(form, self);
-    };
-    xFormData[PROTO] = {
-        constructor: xFormData,
-        shim: true,
-        boundary: null,
-        fields: null,
-
-        dispose: function() {
-            var self = this;
-            self.boundary = null;
-            self.fields = null;
-            return self;
-        },
-
-        delete: function(key, value) {
-            var self = this, index;
-            if (key && HAS.call(self.fields,key))
-            {
-                if (arguments.length > 1)
-                {
-                    index = self.fields[key].indexOf(value);
-                    if (-1 < index) self.fields[key].splice(index, 1);
-                }
-                else
-                {
-                    delete self.fields[key];
-                }
-            }
-            return self;
-        },
-
-        has: function(key, value) {
-            var self = this, index;
-            if (key && HAS.call(self.fields,key))
-            {
-                if (arguments.length > 1)
-                {
-                    index = self.fields[key].indexOf(value);
-                    return (-1 < index);
-                }
-                else
-                {
-                    return true;
-                }
-            }
-            return false;
-        },
-
-        append: function(key, value) {
-            var self = this;
-            if (!HAS.call(self.fields,key)) self.fields[key] = is_array(value) ? value : [value];
-            else if (is_array(value)) self.fields[key] = self.fields[key].concat(value);
-            else self.fields[key].push(value);
-            return self;
-        },
-
-        set: function(key, value) {
-            var self = this;
-            self.fields[key] = is_array(value) ? value : [value];
-            return self;
-        },
-
-        get: function(key) {
-            var self = this;
-            if (key && HAS.call(self.fields,key) && self.fields[key].length)
-                return self.fields[key][0];
-            return undef;
-        },
-
-        getAll: function(key) {
-            var self = this;
-            if (key && HAS.call(self.fields,key) && self.fields[key].length)
-                return self.fields[key];
-            return undef;
-        },
-
-        toString: function() {
-            var self = this,
-                boundary = self.boundary,
-                fields = self.fields,
-                keys = KEYS(fields),
-                f, fl, k, kl = keys.length, key, field, kfields,
-                ks, file,
-                body = "";
-            for (k=0; k<kl; ++k)
-            {
-                key = keys[k];
-                ks = key.toString();
-                kfields = fields[key];
-                fl = kfields.length;
-                for (f=0; f<fl; ++f)
-                {
-                    field = kfields[f];
-                    body += "--" + boundary + "\r\n";
-                    // file upload
-                    if (field.name /*|| field instanceof Blob*/)
-                    {
-                        file = field;
-                        body += "Content-Disposition: form-data; name=\""+ ks +"\"; filename=\""+ file.name +"\"\r\n";
-                        body += "Content-Type: "+ file.type +"\r\n\r\n";
-                        body += file.getAsBinary() + "\r\n";
-                    }
-                    else
-                    {
-                        body += "Content-Disposition: form-data; name=\""+ ks +"\";\r\n\r\n";
-                        body += field.toString('utf8') + "\r\n";
-                    }
-                }
-            }
-            body += "--" + boundary +"--";
-            return body;
-        }
-    };
+    Error.call(this, message);
+    this.name = 'EazyHttpException';
 }
-else
-{
-    xFormData = FormData;
-}
-EazyHttp.FormData = xFormData;
+EazyHttpException[PROTO] = Object.create(Error[PROTO]);
+EazyHttpException[PROTO].constructor = EazyHttpException;
+EazyHttp.Exception = EazyHttpException;
 
 // utils ---------------------------------
+function format_data(method, data)
+{
+    if ('POST' === method)
+    {
+        if (is_string(data))
+        {
+            // String
+            /*pass*/
+        }
+        else if (("undefined" !== typeof(FormData)) && (data instanceof FormData))
+        {
+            // FormData
+            /*pass*/
+        }
+        else if (("undefined" !== typeof(URLSearchParams)) && (data instanceof URLSearchParams))
+        {
+            // URLSearchParams
+            /*pass*/
+        }
+        else if (("undefined" !== typeof(File)) && (data instanceof File))
+        {
+            // File
+            /*pass*/
+        }
+        else if (("undefined" !== typeof(Blob)) && (data instanceof Blob))
+        {
+            // Blob
+            /*pass*/
+        }
+        else if (("undefined" !== typeof(ArrayBuffer)) && (data instanceof ArrayBuffer))
+        {
+            // ArrayBuffer
+            /*pass*/
+        }
+        else if (data.buffer && ("undefined" !== typeof(ArrayBuffer)) && (data.buffer instanceof ArrayBuffer))
+        {
+            // TypedArray
+            /*pass*/
+        }
+        else if (is_obj(data))
+        {
+            data = http_build_query(data, '&');
+        }
+        else
+        {
+            data = '';
+        }
+    }
+    else
+    {
+        data = '';
+    }
+    return data;
+}
+function parse_cookie(str, isRaw)
+{
+    var cookie, parts, part, i, n, name, value, data;
+    cookie = {
+        'isRaw' : isRaw,
+        'expires' : 0,
+        'path' : '/',
+        'domain' : null,
+        'secure' : false,
+        'httponly' : false,
+        'samesite' : null,
+        'partitioned' : false
+    };
+
+    parts = String(str).split(';');
+    for (i=0,n=parts.length; i<n; ++i) parts[i] = parts[i].split('=', 2);
+
+    part = parts.shift();
+    name = !isRaw ? urldecode(trim(part[0])) : trim(part[0]);
+    value = (null != part[1]) ? (!isRaw ? urldecode(trim(part[1])) : trim(part[1])) : null;
+    cookie['name'] = name;
+    cookie['value'] = value;
+
+    data = {};
+    for (i=0,n=parts.length; i<n; ++i)
+    {
+        part = parts[i];
+        name = trim(part[0]).toLowerCase();
+        value = (null != part[1]) ? trim(part[1]) : true;
+        data[name] = value;
+    }
+    cookie = extend(cookie, data);
+
+    cookie['expires'] = new Date(/^[0-9]+$/.test(cookie['expires']) ? (1000*parseInt(cookie['expires'])) : cookie['expires']);
+
+    if ((null != cookie['max-age']) && ((+cookie['max-age']) > 0 || cookie['expires'].getTime() > Date.now()))
+    {
+        cookie['expires'] = new Date(Date.now() + 1000*parseInt(cookie['max-age']));
+    }
+
+    return cookie;
+}
+function format_cookie(cookie, toSet)
+{
+    var RESERVED_CHARS_LIST = "=,; \t\r\n\v\f",
+        RESERVED_CHARS_FROM = ['=', ',', ';', ' ', "\t", "\r", "\n", "\v", "\f"],
+        RESERVED_CHARS_TO = ['%3D', '%2C', '%3B', '%20', '%09', '%0D', '%0A', '%0B', '%0C'],
+        isRaw, str;
+
+    if ((null == cookie) || !is_obj(cookie)) return '';
+
+    if ((null == cookie['name'])) return '';
+
+    isRaw = (true === cookie['isRaw']);
+
+    str = '';
+
+    if (isRaw)
+    {
+        str = String(cookie['name']);
+    }
+    else
+    {
+        str = str_replace(RESERVED_CHARS_FROM, RESERVED_CHARS_TO, String(cookie['name']));
+    }
+
+    str += '=';
+
+    if (null == cookie['value'] || !String(cookie['value']).length)
+    {
+        if (toSet)
+        {
+            str += 'deleted; Expires='+(new Date(Date.now() - 1000*31536001)).toUTCString()+'; Max-Age=0';
+        }
+        else
+        {
+            return '';
+        }
+    }
+    else
+    {
+        str += isRaw ? String(cookie['value']) : rawurlencode(String(cookie['value']));
+        if (toSet)
+        {
+            if (!(cookie['expires'] instanceof Date)) cookie['expires'] = new Date();
+            str += '; Expires='+cookie['expires'].toUTCString()+'; Max-Age='+Math.max(0, cookie['expires'].getTime()-Date.now());
+        }
+    }
+
+    if (toSet)
+    {
+        if ((null != cookie['path']))
+        {
+            str += '; Path='+cookie['path'];
+        }
+
+        if ((null != cookie['domain']))
+        {
+            str += '; Domain='+cookie['domain'];
+        }
+
+        if (cookie['secure'])
+        {
+            str += '; Secure';
+        }
+
+        if (cookie['httponly'])
+        {
+            str += '; HttpOnly';
+        }
+
+        if ((null != cookie['samesite']))
+        {
+            str += '; SameSite='+cookie['samesite'];
+        }
+
+        if (cookie['partitioned'])
+        {
+            str += '; Partitioned';
+        }
+    }
+
+    return str;
+}
+function parse_http_header(responseHeader)
+{
+    var responseHeaders = {}, name, lines, parts, line, i, n;
+    if ("undefined" !== typeof(Headers) && (responseHeader instanceof Headers))
+    {
+        responseHeader.forEach(function(value, name) {
+            name = ucwords(trim(name).toLowerCase(), '-');
+            if (HAS.call(responseHeaders, name)) responseHeaders[name].push(value);
+            else responseHeaders[name] = [value];
+        });
+    }
+    else if (is_obj(responseHeader))
+    {
+        for (name in responseHeader)
+        {
+            if (HAS.call(responseHeader, name))
+            {
+                name = ucwords(trim(name).toLowerCase(), '-');
+                if (HAS.call(responseHeaders, name)) responseHeaders[name].push(value);
+                else responseHeaders[name] = [value];
+            }
+        }
+    }
+    else
+    {
+        if (is_string(responseHeader)) responseHeader = responseHeader.split("\r\n");
+        if (is_array(responseHeader) && responseHeader.length)
+        {
+            for (i=0,n=responseHeader.length; i<n; ++i)
+            {
+                line = responseHeader[i];
+                if (trim(line).length)
+                {
+                    parts = line.split(':', 2);
+                    if (parts.length > 1)
+                    {
+                        name = ucwords(trim(parts[0]).toLowerCase(), '-');
+                        if (HAS.call(responseHeaders, name)) responseHeaders[name].push(parts[1]);
+                        else responseHeaders[name] = [parts[1]];
+                    }
+                }
+            }
+        }
+    }
+    return responseHeaders;
+}
+function parse_http_cookies(responseHeaders)
+{
+    var cookies = [], cookie, i, n;
+    if (responseHeaders && is_array(responseHeaders['Set-Cookie']) && responseHeaders['Set-Cookie'].length)
+    {
+        for (i=0,n=responseHeaders['Set-Cookie'].length; i<n; ++i)
+        {
+            cookie = parse_cookie(responseHeaders['Set-Cookie'][i]);
+            if (is_obj(cookie)) cookies.push(cookie);
+        }
+    }
+    return cookies;
+}
+function format_http_cookies(cookies, headers, toSet)
+{
+    if (is_array(cookies) && cookies.length)
+    {
+        for (var i=0,n=cookies.length,cookie_str; i<n; ++i)
+        {
+            if (is_obj(cookies[i]))
+            {
+                if (toSet)
+                {
+                    cookie_str = format_cookie(cookies[i], true);
+                    if (cookie_str.length)
+                    {
+                        if (HAS.call(headers, 'Set-Cookie'))
+                        {
+                            if (!is_array(headers['Set-Cookie'])) headers['Set-Cookie'] = [headers['Set-Cookie']];
+                            headers['Set-Cookie'].push(cookie_str);
+                        }
+                        else
+                        {
+                            headers['Set-Cookie'] = cookie_str;
+                        }
+                    }
+                }
+                else
+                {
+                    cookie_str = format_cookie(cookies[i], false);
+                    if (cookie_str.length)
+                    {
+                        if (HAS.call(headers, 'Cookie'))
+                        {
+                            headers['Cookie'] = trim(headers['Cookie']);
+                            headers['Cookie'] += (';' === headers['Cookie'].slice(-1) ? ' ' : '; ') + cookie_str;
+                        }
+                        else
+                        {
+                            headers['Cookie'] = cookie_str;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return headers;
+}
 function is_array(x)
 {
     return ('[object Array]' === toString.call(x)) || (x instanceof Array);
@@ -393,6 +645,16 @@ function extend(o1, o2, deep)
         }
     }
     return o1;
+}
+function ucwords(str, sep)
+{
+    var words = String(str).split(sep), i, n;
+    str = '';
+    for (i=0,n=words.length; i<n; ++i)
+    {
+        str += words[i].charAt(0).toUpperCase() + words[i].slice(1);
+    }
+    return str;
 }
 // adapted from https://github.com/kvz/phpjs
 var uriParser = {
@@ -625,282 +887,6 @@ function str_replace(from, to, str)
         str = str.split(from[i]).join(to[i]);
     }
     return str;
-}
-function parse_cookie(str, isRaw)
-{
-    var cookie, parts, part, i, n, name, value, data;
-    cookie = {
-        'isRaw' : isRaw,
-        'expires' : 0,
-        'path' : '/',
-        'domain' : null,
-        'secure' : false,
-        'httponly' : false,
-        'samesite' : null,
-        'partitioned' : false
-    };
-
-    parts = String(str).split(';');
-    for (i=0,n=parts.length; i<n; ++i) parts[i] = parts[i].split('=', 2);
-
-    part = parts.shift();
-    name = !isRaw ? urldecode(trim(part[0])) : trim(part[0]);
-    value = (null != part[1]) ? (!isRaw ? urldecode(trim(part[1])) : trim(part[1])) : null;
-    cookie['name'] = name;
-    cookie['value'] = value;
-
-    data = {};
-    for (i=0,n=parts.length; i<n; ++i)
-    {
-        part = parts[i];
-        name = trim(part[0]).toLowerCase();
-        value = (null != part[1]) ? trim(part[1]) : true;
-        data[name] = value;
-    }
-    cookie = extend(cookie, data);
-
-    cookie['expires'] = new Date(/^[0-9]+$/.test(cookie['expires']) ? (1000*parseInt(cookie['expires'])) : cookie['expires']);
-
-    if ((null != cookie['max-age']) && ((+cookie['max-age']) > 0 || cookie['expires'].getTime() > Date.now()))
-    {
-        cookie['expires'] = new Date(Date.now() + 1000*parseInt(cookie['max-age']));
-    }
-
-    return cookie;
-}
-function format_cookie(cookie, toSet)
-{
-    var RESERVED_CHARS_LIST = "=,; \t\r\n\v\f",
-        RESERVED_CHARS_FROM = ['=', ',', ';', ' ', "\t", "\r", "\n", "\v", "\f"],
-        RESERVED_CHARS_TO = ['%3D', '%2C', '%3B', '%20', '%09', '%0D', '%0A', '%0B', '%0C'],
-        isRaw, str;
-
-    if ((null == cookie) || !is_obj(cookie)) return '';
-
-    if ((null == cookie['name'])) return '';
-
-    isRaw = (true === cookie['isRaw']);
-
-    str = '';
-
-    if (isRaw)
-    {
-        str = String(cookie['name']);
-    }
-    else
-    {
-        str = str_replace(RESERVED_CHARS_FROM, RESERVED_CHARS_TO, String(cookie['name']));
-    }
-
-    str += '=';
-
-    if (null == cookie['value'] || !String(cookie['value']).length)
-    {
-        if (toSet)
-        {
-            str += 'deleted; Expires='+(new Date(Date.now() - 1000*31536001)).toUTCString()+'; Max-Age=0';
-        }
-        else
-        {
-            return '';
-        }
-    }
-    else
-    {
-        str += isRaw ? String(cookie['value']) : rawurlencode(String(cookie['value']));
-        if (toSet)
-        {
-            if (!(cookie['expires'] instanceof Date)) cookie['expires'] = new Date();
-            str += '; Expires='+cookie['expires'].toUTCString()+'; Max-Age='+Math.max(0, cookie['expires'].getTime()-Date.now());
-        }
-    }
-
-    if (toSet)
-    {
-        if ((null != cookie['path']))
-        {
-            str += '; Path='+cookie['path'];
-        }
-
-        if ((null != cookie['domain']))
-        {
-            str += '; Domain='+cookie['domain'];
-        }
-
-        if (cookie['secure'])
-        {
-            str += '; Secure';
-        }
-
-        if (cookie['httponly'])
-        {
-            str += '; HttpOnly';
-        }
-
-        if ((null != cookie['samesite']))
-        {
-            str += '; SameSite='+cookie['samesite'];
-        }
-
-        if (cookie['partitioned'])
-        {
-            str += '; Partitioned';
-        }
-    }
-
-    return str;
-}
-// parse and extract headers from header_str
-function parse_headers(s)
-{
-    var headers = {},
-        key = null, lines, parts, i, l, line;
-    if (s && s.length)
-    {
-        lines = s.split("\r\n");
-        l = lines.length;
-        for (i=0; i<l; ++i)
-        {
-            line = lines[i];
-            parts = line.split(":");
-            if (parts.length > 1)
-            {
-                key = trim(parts.shift());
-                headers[key] = parts.join(":");
-            }
-            else if (key)
-            {
-                headers[key] += "\r\n" + parts[0];
-            }
-        }
-    }
-    return headers;
-}
-// parse and extract headers from header_str
-function build_headers(headers)
-{
-    var header = '',
-        key = null, lines, parts, i, l, line;
-    lines = s.split(/(\r\n)|\r|\n/g);
-    l = lines.length;
-    for (i=0; i<l; ++i)
-    {
-        line = lines[i];
-        parts = line.split(":");
-        if (parts.length > 1)
-        {
-            key = trim(parts.shift());
-            headers[key] = parts.join(":");
-        }
-        else if (key)
-        {
-            headers[key] += "\r\n" + parts[0];
-        }
-    }
-    return header;
-}
-function parse_form(form, formData)
-{
-    var data = formData && formData instanceof xFormData ? formData : new xFormData();
-    // https://developer.mozilla.org/en-US/docs/Web/API/HTMLFormElement/elements
-    if (form && form.elements && form.elements.length)
-    {
-        var i, l = form.elements.length, field, fieldtype, type, key, value;
-        for (i=0; i<l; ++i)
-        {
-            field = form.elements[i];
-            fieldtype = field.nodeName.toLowerCase();
-            if ( !/input|textarea|select/.test(fieldtype) ||
-                field.disabled ||
-                !field.name ||
-                !field.name.length ) continue;
-            type = field.type.toLowerCase();
-            key = field.name;
-            value = null;
-            switch (fieldtype)
-            {
-                case 'input':
-                case 'textarea':
-                    switch (type)
-                    {
-                        case 'radio':
-                            if (field.checked && "false" === field.value)
-                            {
-                                value = false;
-                                break;
-                            }
-                        case 'checkbox':
-                            if (field.checked && "true" === field.value)
-                            {
-                                value = true;
-                                break;
-                            }
-                            if (!field.checked && "true" === field.value)
-                            {
-                                value = false;
-                                break;
-                            }
-                            if (field.checked)
-                            {
-                                value = field.value;
-                                break;
-                            }
-                            break;
-
-                        case 'file':
-                            value = field.files/*[0]??*/;
-                            break;
-
-                        case 'button':
-                        case 'reset':
-                        case 'submit':
-                        case 'image':
-                            break;
-
-                        default:
-                            value = field.value;
-                            break;
-                    }
-                    break;
-
-                case 'select':
-                    var selected, options, i, l;
-
-                    if (!field.multiple)
-                    {
-                        value = field.value;
-                        break;
-                    }
-                    selected = [];
-                    for (options = field.getElementsByTagName("option"), i = 0, l = options.length; i < l; ++i)
-                    {
-                        if (options[i].selected)
-                            selected.push(options[i].value);
-                    }
-
-                    value = selected;
-                    break;
-
-                default:
-                    break;
-            }
-            if (null == value) continue;
-        }
-    }
-    return data;
-}
-function form_encode(form, formData)
-{
-    if (form)
-    {
-        if (!isNode && form instanceof HTMLFormElement) form = parse_form(form, formData);
-        // "multipart/form-data"
-        if (form instanceof xFormData) return form.shim ? form.toString() : form;
-        //'application/x-www-form-urlencoded; charset=utf-8'
-        if (is_string(form)) return urlencode(form.toString('utf8'));
-        else if (is_obj(form) || is_array(form) ) return glue(form)/*.toString('utf8')*/;
-    }
-    return '';
 }
 
 // export it

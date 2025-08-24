@@ -90,6 +90,9 @@ class EazyHttp
         // TODO: support POST files ??
         // TODO: support receive binary data ??
         // TODO: support more methods, eg PUT, DELETE, ..
+        if (empty($headers)) $headers = array();
+        if (empty($cookies)) $cookies = array();
+
         $responseStatus = 0;
         $responseBody = false;
         $responseHeaders = array();
@@ -109,32 +112,32 @@ class EazyHttp
 
                     case 'GET':
                     default:
-                    $responseBody = $this->do_http_client('GET', $uri.(!empty($data) ? ((false === strpos($uri, '?') ? '?' : '&').http_build_query($data, '', '&')) : ''), '', $options);
+                    $responseBody = $this->do_http_client('GET', $uri . (is_array($data) ? ((false === strpos($uri, '?') ? '?' : '&').http_build_query($data, '', '&')) : ''), '', $options);
                     break;
                 }
             }
             else
             {
-                if ('POST' === $method)
+                $hs = array_merge(array(), $headers); $headers = array();
+                foreach ($hs as $name => $value) $headers[ucwords(strtolower(trim($name)), '-')] = $value;
+                $headers = array_merge(array('User-Agent' => 'EazyHttp', 'Accept' => '*/*'), $headers);
+                if (('POST' === $method) && !isset($headers['Content-Type']))
                 {
-                    $requestHeaders = $this->format_http_cookies($cookies, $this->format_http_header($headers, array('Content-type: application/x-www-form-urlencoded','Accept: */*'), ': '), ': ');
+                    $headers['Content-Type'] = 'application/x-www-form-urlencoded';
                 }
-                else
-                {
-                    $requestHeaders = $this->format_http_cookies($cookies, $this->format_http_header($headers, array('Accept: */*'), ': '), ': ');
-                }
+                $requestHeaders = $this->format_http_cookies($cookies, $this->format_http_header($headers, array()));
 
                 if (function_exists('curl_init') && function_exists('curl_exec'))
                 {
                     switch ($method)
                     {
                         case 'POST':
-                        $responseBody = $this->do_http_curl('POST', $uri, !empty($data) ? http_build_query($data, '', '&') : '', $requestHeaders, $responseStatus, $responseHeaders, $responseCookies, $options);
+                        $responseBody = $this->do_http_curl('POST', $uri, is_array($data) ? http_build_query($data, '', '&') : (is_string($data) ? $data : ''), $requestHeaders, $responseStatus, $responseHeaders, $responseCookies, $options);
                         break;
 
                         case 'GET':
                         default:
-                        $responseBody = $this->do_http_curl('GET', $uri.(!empty($data) ? ((false === strpos($uri, '?') ? '?' : '&').http_build_query($data, '', '&')) : ''), '', $requestHeaders, $responseStatus, $responseHeaders, $responseCookies, $options);
+                        $responseBody = $this->do_http_curl('GET', $uri . (is_array($data) ? ((false === strpos($uri, '?') ? '?' : '&').http_build_query($data, '', '&')) : ''), '', $requestHeaders, $responseStatus, $responseHeaders, $responseCookies, $options);
                         break;
                     }
                 }
@@ -143,12 +146,12 @@ class EazyHttp
                     switch ($method)
                     {
                         case 'POST':
-                        $responseBody = $this->do_http_file('POST', $uri, !empty($data) ? http_build_query($data, '', '&') : '', $requestHeaders, $responseStatus, $responseHeaders, $responseCookies, $options);
+                        $responseBody = $this->do_http_file('POST', $uri, is_array($data) ? http_build_query($data, '', '&') : (is_string($data) ? $data : ''), $requestHeaders, $responseStatus, $responseHeaders, $responseCookies, $options);
                         break;
 
                         case 'GET':
                         default:
-                        $responseBody = $this->do_http_file('GET', $uri.(!empty($data) ? ((false === strpos($uri, '?') ? '?' : '&').http_build_query($data, '', '&')) : ''), '', $requestHeaders, $responseStatus, $responseHeaders, $responseCookies, $options);
+                        $responseBody = $this->do_http_file('GET', $uri . (is_array($data) ? ((false === strpos($uri, '?') ? '?' : '&').http_build_query($data, '', '&')) : ''), '', $requestHeaders, $responseStatus, $responseHeaders, $responseCookies, $options);
                         break;
                     }
                 }
@@ -157,12 +160,12 @@ class EazyHttp
                     switch ($method)
                     {
                         case 'POST':
-                        $responseBody = $this->do_http_socket('POST', $uri, !empty($data) ? http_build_query($data, '', '&') : '', $requestHeaders, $responseStatus, $responseHeaders, $responseCookies, $options);
+                        $responseBody = $this->do_http_socket('POST', $uri, is_array($data) ? http_build_query($data, '', '&') : (is_string($data) ? $data : ''), $requestHeaders, $responseStatus, $responseHeaders, $responseCookies, $options);
                         break;
 
                         case 'GET':
                         default:
-                        $responseBody = $this->do_http_socket('GET', $uri.(!empty($data) ? ((false === strpos($uri, '?') ? '?' : '&').http_build_query($data, '', '&')) : ''), '', $requestHeaders, $responseStatus, $responseHeaders, $responseCookies, $options);
+                        $responseBody = $this->do_http_socket('GET', $uri . (is_array($data) ? ((false === strpos($uri, '?') ? '?' : '&').http_build_query($data, '', '&')) : ''), '', $requestHeaders, $responseStatus, $responseHeaders, $responseCookies, $options);
                         break;
                     }
                 }
@@ -179,24 +182,24 @@ class EazyHttp
 
         // setup
         $responseHeader = array();
-        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($curl, CURLOPT_FOLLOWLOCATION, $options['follow_location']);
-        curl_setopt($curl, CURLOPT_MAXREDIRS, $options['max_redirects']);
-        curl_setopt($curl, CURLOPT_TIMEOUT, (int)$options['timeout']); // sec
-        curl_setopt($curl, CURLOPT_HEADERFUNCTION, function($curl, $header) use (&$responseHeader) {
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER,  true);
+        curl_setopt($curl, CURLOPT_FOLLOWLOCATION,  $options['follow_location']);
+        curl_setopt($curl, CURLOPT_MAXREDIRS,       $options['max_redirects']);
+        curl_setopt($curl, CURLOPT_TIMEOUT,         (int)$options['timeout']); // sec
+        curl_setopt($curl, CURLOPT_HEADERFUNCTION,  function($curl, $header) use (&$responseHeader) {
             $responseHeader[] = trim($header);
             return strlen($header);
         });
-        curl_setopt($curl, CURLOPT_HTTPHEADER, $requestHeaders);
+        curl_setopt($curl, CURLOPT_HTTPHEADER,      $requestHeaders);
 
         if ('POST' === strtoupper($method))
         {
             curl_setopt($curl, CURLOPT_POST, true);
-            curl_setopt($curl, CURLOPT_POSTFIELDS, $requestBody);
+            curl_setopt($curl, CURLOPT_POSTFIELDS,  $requestBody);
         }
         else
         {
-            curl_setopt($curl, CURLOPT_HTTPGET, true);
+            curl_setopt($curl, CURLOPT_HTTPGET,     true);
         }
 
         // make request
@@ -329,7 +332,7 @@ class EazyHttp
             $responseCookies = $this->parse_http_cookies($responseHeaders);
             if (!empty($responseHeader) && preg_match('#HTTP/\\S*\\s+(\\d{3})#i', $responseHeader, $m)) $responseStatus = (int)$m[1];
             $responseBody = isset($response[1]) ? $response[1] : '';
-            if (isset($responseHeaders['transfer-encoding']) && ('chunked' === strtolower($responseHeaders['transfer-encoding'][0])))
+            if (isset($responseHeaders['Transfer-Encoding']) && ('chunked' === strtolower($responseHeaders['Transfer-Encoding'][0])))
             {
                 // https://en.wikipedia.org/wiki/Chunked_transfer_encoding
                 $responseBody = $this->parse_chunked($responseBody);
@@ -401,27 +404,6 @@ class EazyHttp
     }*/
 
     // utils ---------------------------------
-    protected function datetime($time = null)
-    {
-        if (is_null($time)) $time = time();
-        return gmdate('D, d M Y H:i:s', $time) . ' GMT';
-    }
-
-    protected function flatten($input, $output = array(), $prefix = null)
-    {
-        if (!empty($input))
-        {
-            foreach ($input as $key => $val)
-            {
-                $name = empty($prefix) ? $key : ($prefix."[$key]");
-
-                if (is_array($val)) $output = $this->flatten($val, $output, $name);
-                else $output[$name] = $val;
-            }
-        }
-        return $output;
-    }
-
     protected function parse_http_header($responseHeader)
     {
         $responseHeaders = array();
@@ -430,7 +412,7 @@ class EazyHttp
             $header = explode(':', $header, 2);
             if (count($header) >= 2)
             {
-                $k = strtolower(trim($header[0])); $v = trim($header[1]);
+                $k = ucwords(strtolower(trim($header[0])), '-'); $v = trim($header[1]);
                 if (!isset($responseHeaders[$k])) $responseHeaders[$k] = array($v);
                 else $responseHeaders[$k][] = $v;
             }
@@ -438,10 +420,8 @@ class EazyHttp
         return $responseHeaders;
     }
 
-    protected function format_http_header($headers, $output = array(), $glue = '')
+    protected function format_http_header($headers, $output = array())
     {
-        $RESERVED_CHARS_FROM = array('=', ',', ';', ' ', "\t", "\r", "\n", "\v", "\f");
-        $RESERVED_CHARS_TO = array('%3D', '%2C', '%3B', '%20', '%09', '%0D', '%0A', '%0B', '%0C');
         if (!empty($headers))
         {
             foreach ($headers as $key => $val)
@@ -452,7 +432,7 @@ class EazyHttp
                     {
                         if (isset($v) && strlen((string)$v))
                         {
-                            $output[] = ((string)$key) . $glue . str_replace($RESERVED_CHARS_FROM, $RESERVED_CHARS_TO, (string)$v);
+                            $output[] = ((string)$key) . ': ' . ((string)$v);
                         }
                     }
                 }
@@ -460,7 +440,7 @@ class EazyHttp
                 {
                     if (isset($val) && strlen((string)$val))
                     {
-                        $output[] = ((string)$key) . $glue . str_replace($RESERVED_CHARS_FROM, $RESERVED_CHARS_TO, (string)$val);
+                        $output[] = ((string)$key) . ': ' . ((string)$val);
                     }
                 }
             }
@@ -471,14 +451,14 @@ class EazyHttp
     protected function parse_cookie($str, $isRaw = false)
     {
         $cookie = array(
-            'isRaw' => $isRaw,
-            'expires' => 0,
-            'path' => '/',
-            'domain' => null,
-            'secure' => false,
-            'httponly' => false,
-            'samesite' => null,
-            'partitioned' => false,
+            'isRaw'         => $isRaw,
+            'expires'       => 0,
+            'path'          => '/',
+            'domain'        => null,
+            'secure'        => false,
+            'httponly'      => false,
+            'samesite'      => null,
+            'partitioned'   => false,
         );
 
         $parts = explode(';', strval($str));
@@ -602,9 +582,9 @@ class EazyHttp
     protected function parse_http_cookies($responseHeaders)
     {
         $cookies = array();
-        if (!empty($responseHeaders) && !empty($responseHeaders['set-cookie']))
+        if (!empty($responseHeaders) && !empty($responseHeaders['Set-Cookie']))
         {
-            foreach ($responseHeaders['set-cookie'] as $cookie_str)
+            foreach ($responseHeaders['Set-Cookie'] as $cookie_str)
             {
                 $cookie = $this->parse_cookie($cookie_str);
                 if (!empty($cookie)) $cookies[] = $cookie;
@@ -613,7 +593,7 @@ class EazyHttp
         return $cookies;
     }
 
-    protected function format_http_cookies($cookies, $output = array(), $glue = '', $toSet = false)
+    protected function format_http_cookies($cookies, $output = array(), $toSet = false)
     {
         if (!empty($cookies))
         {
@@ -624,12 +604,12 @@ class EazyHttp
                     if ($toSet)
                     {
                         $cookie_str = $this->format_cookie($cookie, true);
-                        if (strlen($cookie_str)) $output[] = 'Set-Cookie' . $glue . $cookie_str;
+                        if (strlen($cookie_str)) $output[] = 'Set-Cookie' . ': ' . $cookie_str;
                     }
                     else
                     {
                         $cookie_str = $this->format_cookie($cookie, false);
-                        if (strlen($cookie_str)) $output[] = 'Cookie' . $glue . $cookie_str;
+                        if (strlen($cookie_str)) $output[] = 'Cookie' . ': ' . $cookie_str;
                     }
                 }
             }
@@ -672,6 +652,27 @@ class EazyHttp
             }
         }
         return $content;
+    }
+    
+    protected function datetime($time = null)
+    {
+        if (is_null($time)) $time = time();
+        return gmdate('D, d M Y H:i:s', $time) . ' GMT';
+    }
+
+    protected function flatten($input, $output = array(), $prefix = null)
+    {
+        if (!empty($input))
+        {
+            foreach ($input as $key => $val)
+            {
+                $name = empty($prefix) ? $key : ($prefix."[$key]");
+
+                if (is_array($val)) $output = $this->flatten($val, $output, $name);
+                else $output[$name] = $val;
+            }
+        }
+        return $output;
     }
 }
 class EazyHttpException extends Exception
