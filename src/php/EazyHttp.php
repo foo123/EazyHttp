@@ -10,8 +10,29 @@ class EazyHttp
 {
     const VERSION = '0.1.0';
 
+    protected $opts = array();
+
     public function __construct()
     {
+        // some defaults
+        $this->option('timeout',            30); // sec
+        $this->option('follow_location',    1);
+        $this->option('max_redirects',      3);
+        $this->option('return_type',        'string'); // default
+    }
+
+    public function option($key, $val = null)
+    {
+        $nargs = func_num_args();
+        if (1 == $nargs)
+        {
+            return isset($this->opts[$key]) ? $this->opts[$key] : null;
+        }
+        elseif (1 < $nargs)
+        {
+            $this->opts[$key] = $val;
+        }
+        return $this;
     }
 
     public function get($uri, $data = array(), $headers = null, $cookies = null)
@@ -48,12 +69,7 @@ class EazyHttp
             $responseStatus,
             $responseHeaders,
             $responseCookies,
-            array(
-                'client'            => false,
-                'follow_location'   => 1,
-                'max_redirects'     => 3,
-                'timeout'           => 30, // sec
-            )
+            'server'
         );
         /*if (is_array($responseHeaders) && isset($responseHeaders['set-cookie']))
         {
@@ -63,7 +79,7 @@ class EazyHttp
             'status'    => $responseStatus,
             'content'   => $responseBody,
             'headers'   => $responseHeaders,
-            'cookies'   => $responseCookies,
+            'cookies'   => $responseCookies
         );
     }
 
@@ -79,13 +95,11 @@ class EazyHttp
             $responseStatus,
             $responseHeaders,
             $responseCookies,
-            array(
-                'client'    => true,
-            )
+            'client'
         );
     }
 
-    protected function do_http($method = 'GET', $uri = '', $data = null, $headers = null, $cookies = null, &$responseBody = '', &$responseStatus = 0, &$responseHeaders = null, &$responseCookies = null, $options = array())
+    protected function do_http($method = 'GET', $uri = '', $data = null, $headers = null, $cookies = null, &$responseBody = '', &$responseStatus = 0, &$responseHeaders = null, &$responseCookies = null, $type = 'server')
     {
         // TODO: support POST files ??
         // TODO: support receive binary data ??
@@ -101,91 +115,96 @@ class EazyHttp
         if (!empty($uri))
         {
             $method = strtoupper((string)$method);
+            if ('POST' !== $method) $method = 'GET';
 
-            if ($options['client'])
+            if ('client' === $type)
             {
-                switch ($method)
+                if ('GET' === $method)
                 {
-                    case 'POST':
-                    $responseBody = $this->do_http_client('POST', $uri, $data, $options);
-                    break;
-
-                    case 'GET':
-                    default:
-                    $responseBody = $this->do_http_client('GET', $uri . (is_array($data) ? ((false === strpos($uri, '?') ? '?' : '&').http_build_query($data, '', '&')) : ''), '', $options);
-                    break;
+                    $uri .= is_array($data) ? ((false === strpos($uri, '?') ? '?' : '&') . http_build_query($data, '', '&')) : '';
+                    $data = '';
                 }
+                $responseBody = $this->do_http_client(
+                    $method,
+                    $uri,
+                    $data
+                );
             }
             else
             {
                 $hs = array_merge(array(), $headers); $headers = array();
                 foreach ($hs as $name => $value) $headers[ucwords(strtolower(trim($name)), '-')] = $value;
                 $headers = array_merge(array('User-Agent' => 'EazyHttp', 'Accept' => '*/*'), $headers);
+
                 if (('POST' === $method) && !isset($headers['Content-Type']))
                 {
                     $headers['Content-Type'] = 'application/x-www-form-urlencoded';
                 }
                 $requestHeaders = $this->format_http_cookies($cookies, $this->format_http_header($headers, array()));
 
+                if ('POST' === $method)
+                {
+                    $data = is_array($data) ? http_build_query($data, '', '&') : (is_string($data) ? $data : '');
+                }
+                else
+                {
+                    $uri .= is_array($data) ? ((false === strpos($uri, '?') ? '?' : '&') . http_build_query($data, '', '&')) : '';
+                    $data = '';
+                }
+
                 if (function_exists('curl_init') && function_exists('curl_exec'))
                 {
-                    switch ($method)
-                    {
-                        case 'POST':
-                        $responseBody = $this->do_http_curl('POST', $uri, is_array($data) ? http_build_query($data, '', '&') : (is_string($data) ? $data : ''), $requestHeaders, $responseStatus, $responseHeaders, $responseCookies, $options);
-                        break;
-
-                        case 'GET':
-                        default:
-                        $responseBody = $this->do_http_curl('GET', $uri . (is_array($data) ? ((false === strpos($uri, '?') ? '?' : '&').http_build_query($data, '', '&')) : ''), '', $requestHeaders, $responseStatus, $responseHeaders, $responseCookies, $options);
-                        break;
-                    }
+                    $responseBody = $this->do_http_curl(
+                        $method,
+                        $uri,
+                        $data,
+                        $requestHeaders,
+                        $responseStatus,
+                        $responseHeaders,
+                        $responseCookies
+                    );
                 }
                 elseif (function_exists('stream_context_create') && function_exists('file_get_contents') && ini_get('allow_url_fopen'))
                 {
-                    switch ($method)
-                    {
-                        case 'POST':
-                        $responseBody = $this->do_http_file('POST', $uri, is_array($data) ? http_build_query($data, '', '&') : (is_string($data) ? $data : ''), $requestHeaders, $responseStatus, $responseHeaders, $responseCookies, $options);
-                        break;
-
-                        case 'GET':
-                        default:
-                        $responseBody = $this->do_http_file('GET', $uri . (is_array($data) ? ((false === strpos($uri, '?') ? '?' : '&').http_build_query($data, '', '&')) : ''), '', $requestHeaders, $responseStatus, $responseHeaders, $responseCookies, $options);
-                        break;
-                    }
+                    $responseBody = $this->do_http_file(
+                        $method,
+                        $uri,
+                        $data,
+                        $requestHeaders,
+                        $responseStatus,
+                        $responseHeaders,
+                        $responseCookies
+                    );
                 }
                 elseif (function_exists('fsockopen'))
                 {
-                    switch ($method)
-                    {
-                        case 'POST':
-                        $responseBody = $this->do_http_socket('POST', $uri, is_array($data) ? http_build_query($data, '', '&') : (is_string($data) ? $data : ''), $requestHeaders, $responseStatus, $responseHeaders, $responseCookies, $options);
-                        break;
-
-                        case 'GET':
-                        default:
-                        $responseBody = $this->do_http_socket('GET', $uri . (is_array($data) ? ((false === strpos($uri, '?') ? '?' : '&').http_build_query($data, '', '&')) : ''), '', $requestHeaders, $responseStatus, $responseHeaders, $responseCookies, $options);
-                        break;
-                    }
+                    $responseBody = $this->do_http_socket(
+                        $method,
+                        $uri,
+                        $data,
+                        $requestHeaders,
+                        $responseStatus,
+                        $responseHeaders,
+                        $responseCookies
+                    );
                 }
             }
         }
         return $this;
     }
 
-    protected function do_http_curl($method, $uri, $requestBody = '', $requestHeaders = array(), &$responseStatus = 0, &$responseHeaders = null, &$responseCookies = null, $options = array())
+    protected function do_http_curl($method, $uri, $requestBody = '', $requestHeaders = array(), &$responseStatus = 0, &$responseHeaders = null, &$responseCookies = null)
     {
-         set_time_limit(0);
+        set_time_limit(0);
         // init
         $curl = curl_init($uri);
 
         // setup
         $responseHeader = array();
         curl_setopt($curl, CURLOPT_RETURNTRANSFER,  true);
-        curl_setopt($curl, CURLOPT_FOLLOWLOCATION,  $options['follow_location']);
-        curl_setopt($curl, CURLOPT_MAXREDIRS,       $options['max_redirects']);
-        curl_setopt($curl, CURLOPT_TIMEOUT,         (int)$options['timeout']); // sec
+        curl_setopt($curl, CURLOPT_FOLLOWLOCATION,  !empty($this->option('follow_location')));
+        curl_setopt($curl, CURLOPT_MAXREDIRS,       intval($this->option('max_redirects')));
+        curl_setopt($curl, CURLOPT_TIMEOUT,         intval($this->option('timeout'))); // sec
         curl_setopt($curl, CURLOPT_HEADERFUNCTION,  function($curl, $header) use (&$responseHeader) {
             $responseHeader[] = trim($header);
             return strlen($header);
@@ -219,9 +238,9 @@ class EazyHttp
         return $responseBody;
     }
 
-    protected function do_http_file($method, $uri, $requestBody = '', $requestHeaders = array(), &$responseStatus = 0, &$responseHeaders = null, &$responseCookies = null, $options = array())
+    protected function do_http_file($method, $uri, $requestBody = '', $requestHeaders = array(), &$responseStatus = 0, &$responseHeaders = null, &$responseCookies = null)
     {
-         set_time_limit(0);
+        set_time_limit(0);
         // setup
         $contentLength = strlen((string)$requestBody);
         // is content-length needed?? probably not
@@ -229,20 +248,20 @@ class EazyHttp
         if (!empty($requestHeaders))
         {
             $requestHeader = implode("\r\n", (array)$requestHeaders);
-            //$requestHeader .= "\r\nContent-length: $contentLength";
+            //$requestHeader .= "\r\nContent-Length: $contentLength";
         }
         else
         {
-            //$requestHeader = "Content-length: $contentLength";
+            //$requestHeader = "Content-Length: $contentLength";
         }
         $http = stream_context_create(array(
             'http' => array(
                 'method'            => 'POST' === strtoupper($method) ? 'POST' : 'GET',
                 'header'            => $requestHeader,
                 'content'           => (string)$requestBody,
-                'follow_location'   => $options['follow_location'],
-                'max_redirects'     => $options['max_redirects'],
-                'timeout'           => (float)$options['timeout'], // sec
+                'follow_location'   => !empty($this->option('follow_location')),
+                'max_redirects'     => intval($this->option('max_redirects')),
+                'timeout'           => floatval($this->option('timeout')), // sec
                 'ignore_errors'     => true,
             ),
         ));
@@ -271,30 +290,32 @@ class EazyHttp
         return $responseBody;
     }
 
-    protected function do_http_socket($method, $uri, $requestBody = '', $requestHeaders = array(), &$responseStatus = 0, &$responseHeaders = null, &$responseCookies = null, $options = array())
+    protected function do_http_socket($method, $uri, $requestBody = '', $requestHeaders = array(), &$responseStatus = 0, &$responseHeaders = null, &$responseCookies = null)
     {
-         set_time_limit(0);
+        set_time_limit(0);
+        $timeout = intval($this->option('timeout')); // sec
+        $follow_location = !empty($this->option('follow_location'));
+        $max_redirects = intval($this->option('max_redirects'));
         $redirects = 0;
-        while ($redirects <= $options['max_redirects'])
+        while ($redirects <= $max_redirects)
         {
-            $uri = parse_url($uri);
-            if (!isset($uri['host']))
+            $parts = parse_url($uri);
+            if (!isset($parts['host']))
             {
                 $responseStatus = 0;
                 return false;
             }
-            $host = $uri['host'];
-            $scheme = isset($uri['scheme']) ? strtolower($uri['scheme']) : 'http';
-            $port = isset($uri['port']) ? intval($uri['port']) : ('https' === $scheme ? 443 : 80);
-            $path = isset($uri['path']) ? $uri['path'] : '/';
+            $host = $parts['host'];
+            $scheme = isset($parts['scheme']) ? strtolower($parts['scheme']) : 'http';
+            $port = isset($parts['port']) ? intval($parts['port']) : ('https' === $scheme ? 443 : 80);
+            $path = isset($parts['path']) ? $parts['path'] : '/';
             if (!strlen($path)) $path = '/';
-            $query = isset($uri['query']) ? $uri['query'] : '';
-            if (strlen($query)) $path .= '?'.$query;
-            $timeout = (int)$options['timeout']; // sec
+            $query = isset($parts['query']) ? $parts['query'] : '';
+            if (strlen($query)) $path .= '?' . $query;
 
             // open socket, openssl extension needed..?
             try {
-                $fp = @fsockopen(('https' === $scheme ? 'ssl://' : '').$host, $port, $errno, $errstr, $timeout);
+                $fp = @fsockopen(('https' === $scheme ? 'ssl://' : '') . $host, $port, $errno, $errstr, $timeout);
             } catch (Exception $e) {
                 $fp = null;
             }
@@ -328,16 +349,19 @@ class EazyHttp
             // parse headers and content
             $response = explode("\r\n\r\n", $response, 2);
             $responseHeader = isset($response[0]) ? $response[0] : '';
+            $responseBody = isset($response[1]) ? $response[1] : '';
+            if (!empty($responseHeader) && preg_match('#HTTP/\\S*\\s+(\\d{3})#i', $responseHeader, $m))
+            {
+                $responseStatus = (int)$m[1];
+            }
             $responseHeaders = $this->parse_http_header(empty($responseHeader) ? array() : array_map('trim', explode("\r\n", $responseHeader)));
             $responseCookies = $this->parse_http_cookies($responseHeaders);
-            if (!empty($responseHeader) && preg_match('#HTTP/\\S*\\s+(\\d{3})#i', $responseHeader, $m)) $responseStatus = (int)$m[1];
-            $responseBody = isset($response[1]) ? $response[1] : '';
-            if (isset($responseHeaders['Transfer-Encoding']) && ('chunked' === strtolower($responseHeaders['Transfer-Encoding'][0])))
+            if (isset($responseHeaders['transfer-encoding']) && ('chunked' === strtolower($responseHeaders['transfer-encoding'][0])))
             {
                 // https://en.wikipedia.org/wiki/Chunked_transfer_encoding
                 $responseBody = $this->parse_chunked($responseBody);
             }
-            if ((301 <= $responseStatus && $responseStatus <= 304) && $options['follow_location'] && preg_match('#Location:\\s*(\\S+)#i', $responseHeader, $m))
+            if ($follow_location && (301 <= $responseStatus && $responseStatus <= 308) && preg_match('#Location:\\s*(\\S+)#i', $responseHeader, $m) && ($uri !== $m[1]))
             {
                 ++$redirects;
                 $uri = $m[1];
@@ -351,7 +375,7 @@ class EazyHttp
         return $responseBody;
     }
 
-    protected function do_http_client($method, $uri, $requestBody = '', $options = array())
+    protected function do_http_client($method, $uri, $requestBody = '')
     {
         switch (strtoupper($method))
         {
@@ -404,22 +428,6 @@ class EazyHttp
     }*/
 
     // utils ---------------------------------
-    protected function parse_http_header($responseHeader)
-    {
-        $responseHeaders = array();
-        foreach ($responseHeader as $header)
-        {
-            $header = explode(':', $header, 2);
-            if (count($header) >= 2)
-            {
-                $k = ucwords(strtolower(trim($header[0])), '-'); $v = trim($header[1]);
-                if (!isset($responseHeaders[$k])) $responseHeaders[$k] = array($v);
-                else $responseHeaders[$k][] = $v;
-            }
-        }
-        return $responseHeaders;
-    }
-
     protected function format_http_header($headers, $output = array())
     {
         if (!empty($headers))
@@ -444,6 +452,55 @@ class EazyHttp
                     }
                 }
             }
+        }
+        return $output;
+    }
+
+    protected function parse_http_header($responseHeader)
+    {
+        $responseHeaders = array();
+        foreach ($responseHeader as $header)
+        {
+            $header = explode(':', $header, 2);
+            if (count($header) >= 2)
+            {
+                // return lowercase headers as in spec
+                $k = /*ucwords(*/strtolower(trim($header[0]))/*, '-')*/; $v = trim($header[1]);
+                if (!isset($responseHeaders[$k])) $responseHeaders[$k] = array($v);
+                else $responseHeaders[$k][] = $v;
+            }
+        }
+        return $responseHeaders;
+    }
+
+    protected function parse_http_cookies($responseHeaders)
+    {
+        $cookies = array();
+        if (!empty($responseHeaders) && !empty($responseHeaders['set-cookie']))
+        {
+            foreach ($responseHeaders['set-cookie'] as $cookie_str)
+            {
+                $cookie = $this->parse_cookie($cookie_str);
+                if (!empty($cookie)) $cookies[] = $cookie;
+            }
+        }
+        return $cookies;
+    }
+
+    protected function format_http_cookies($cookies, $output = array())
+    {
+        if (!empty($cookies))
+        {
+            $valid_cookies = array();
+            foreach ($cookies as $cookie)
+            {
+                if (!empty($cookie))
+                {
+                    $cookie_str = $this->format_cookie($cookie, false);
+                    if (strlen($cookie_str)) $valid_cookies[] = $cookie_str;
+                }
+            }
+            if (!empty($valid_cookies)) $output[] = 'Cookie' . ': ' . implode('; ', $valid_cookies);
         }
         return $output;
     }
@@ -579,44 +636,6 @@ class EazyHttp
         return $str;
     }
 
-    protected function parse_http_cookies($responseHeaders)
-    {
-        $cookies = array();
-        if (!empty($responseHeaders) && !empty($responseHeaders['Set-Cookie']))
-        {
-            foreach ($responseHeaders['Set-Cookie'] as $cookie_str)
-            {
-                $cookie = $this->parse_cookie($cookie_str);
-                if (!empty($cookie)) $cookies[] = $cookie;
-            }
-        }
-        return $cookies;
-    }
-
-    protected function format_http_cookies($cookies, $output = array(), $toSet = false)
-    {
-        if (!empty($cookies))
-        {
-            foreach ($cookies as $cookie)
-            {
-                if (!empty($cookie))
-                {
-                    if ($toSet)
-                    {
-                        $cookie_str = $this->format_cookie($cookie, true);
-                        if (strlen($cookie_str)) $output[] = 'Set-Cookie' . ': ' . $cookie_str;
-                    }
-                    else
-                    {
-                        $cookie_str = $this->format_cookie($cookie, false);
-                        if (strlen($cookie_str)) $output[] = 'Cookie' . ': ' . $cookie_str;
-                    }
-                }
-            }
-        }
-        return $output;
-    }
-
     protected function parse_chunked($chunked)
     {
         $content = '';
@@ -653,7 +672,7 @@ class EazyHttp
         }
         return $content;
     }
-    
+
     protected function datetime($time = null)
     {
         if (is_null($time)) $time = time();

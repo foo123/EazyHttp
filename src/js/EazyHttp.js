@@ -23,27 +23,69 @@ var VERSION = '0.1.0',
     HAS = Object[PROTO].hasOwnProperty,
     toString = Object[PROTO].toString,
 
-    trim = String[PROTO].trim
-        ? function(s) {return s.trim();}
-        : function(s) {return s.replace(/^\s+|\s+$/g, '');},
-
     isNode = ('undefined' !== typeof(global)) && ('[object Global]' === toString.call(global)),
 
-    http = isNode ? require('http') : function() {return 'undefined' !== typeof(XMLHttpRequest) ? (new XMLHttpRequest()) : (new ActiveXObject('Microsoft.XMLHTTP'));}
+    http = isNode ? require('http') : null, https = isNode ? require('https') : null
 ;
 
 function EazyHttp()
 {
+    this.opts = {};
+    // some defaults
+    this.option('timeout',          30); // sec
+    this.option('follow_location',  1);
+    this.option('max_redirects',    3);
+    this.option('return_type',      'string');
 }
 EazyHttp[PROTO] = {
     constructor: EazyHttp,
 
+    opts: null,
+    option: function(key, val = null) {
+        var nargs = arguments.length;
+        if (1 == nargs)
+        {
+            return HAS.call(this.opts, key) ? this.opts[key] : undef;
+        }
+        else if (1 < nargs)
+        {
+            this.opts[key] = val;
+        }
+        return this;
+    },
+
     get: function(uri, data, headers, cookies, cb) {
-        return this._do_http('GET', uri, data, headers, cookies, cb);
+        var self = this;
+        if ((null == cb) && ('undefined' !== typeof(Promise)))
+        {
+            return new Promise(function(resolve, reject) {
+                self._do_http('GET', uri, data, headers, cookies, function(error, response) {
+                    if (error) reject(error);
+                    else resolve(response);
+                });
+            });
+        }
+        else
+        {
+            return self._do_http('GET', uri, data, headers, cookies, cb);
+        }
     },
 
     post: function(uri, data, headers, cookies, cb) {
-        return this._do_http('POST', uri, data, headers, cookies, cb);
+        var self = this;
+        if ((null == cb) && ('undefined' !== typeof(Promise)))
+        {
+            return new Promise(function(resolve, reject) {
+                self._do_http('POST', uri, data, headers, cookies, function(error, response) {
+                    if (error) reject(error);
+                    else resolve(response);
+                });
+            });
+        }
+        else
+        {
+            return self._do_http('POST', uri, data, headers, cookies, cb);
+        }
     },
 
     _do_http: function(method, uri, data, headers, cookies, cb)  {
@@ -68,19 +110,27 @@ EazyHttp[PROTO] = {
         {
             headers['Content-Type'] = 'application/x-www-form-urlencoded';
         }
+
+        if ('POST' === method)
+        {
+            data = format_data(method, data);
+        }
+        else
+        {
+            uri += is_obj(data) ? ((-1 === uri.indexOf('?') ? '?' : '&') + http_build_query(data, '&')) : '';
+            data = '';
+        }
+
         if (isNode)
         {
             self._do_http_server(
                 method,
-                uri + (('GET' === method) && is_obj(data) ? ((-1 === uri.indexOf('?') ? '?' : '&') + http_build_query(data, '&')) : ''),
-                'POST' === method ? data : '',
+                uri,
+                data,
                 headers,
                 cookies,
-                {
-                    'timeout'   : 30, // sec
-                },
-                function(err, response) {
-                    if (is_callable(cb)) cb(err, response);
+                function(error, response) {
+                    if (is_callable(cb)) cb(error, response);
                 }
             );
         }
@@ -88,16 +138,12 @@ EazyHttp[PROTO] = {
         {
             self["undefined" !== typeof(fetch) ? '_do_http_fetch' : '_do_http_xhr'](
                 method,
-                uri + (('GET' === method) && is_obj(data) ? ((-1 === uri.indexOf('?') ? '?' : '&') + http_build_query(data, '&')) : ''),
-                'POST' === method ? data : '',
+                uri,
+                data,
                 headers,
                 cookies,
-                {
-                    'timeout'   : 30, // sec
-                    'redirect'  : 'follow'
-                },
-                function(err, response) {
-                    if (is_callable(cb)) cb(err, response);
+                function(error, response) {
+                    if (is_callable(cb)) cb(error, response);
                 }
             );
         }
@@ -105,93 +151,118 @@ EazyHttp[PROTO] = {
     },
 
     _do_http_server: function(method, uri, data, headers, cookies, options, cb) {
-        var protocol, port, host, path, query;
+        var self = this, timeout = self.option('timeout'),
+            follow_location = !!self.option('follow_location'),
+            max_redirects = parseInt(self.option('max_redirects')),
+            return_type = String(self.option('return_type')).toLowerCase(),
+            do_request;
 
-        uri = parse_url(uri);
-        host = uri['host'];
-        if (!host || !host.length)
-        {
-            cb(new EazyHttpException('No host'), {
-                status  : 0,
-                content : false,
-                headers : {},
-                cookies : []
+        do_request = function(uri, redirects) {
+            if (redirects > max_redirects)
+            {
+                cb(new EazyHttpException('Many redirects'), {
+                    status  : 0,
+                    content : false,
+                    headers : {},
+                    cookies : []
+                });
+                return;
+            }
+            var m, parts, host, protocol, port, path, query;
+            parts = parse_url(uri);
+            host = parts['host'];
+            if (!host || !host.length)
+            {
+                cb(new EazyHttpException('No host'), {
+                    status  : 0,
+                    content : false,
+                    headers : {},
+                    cookies : []
+                });
+                return;
+            }
+            protocol = HAS.call(parts, 'scheme') ? parts['scheme'].toLowerCase() : 'http';
+            port = HAS.call(parts, 'port') ? +parts['port'] : ('https' === protocol ? 443 : 80);
+            path = HAS.call(parts, 'path') ? parts['path'] : '/';
+            if (!path.length) path = '/';
+            path += HAS.call(parts, 'query') && parts['query'].length ? ('?' + parts['query']) : '';
+
+            var request = ('https' === protocol ? https : http).request({
+                'method'    : method,
+                'protocol'  : protocol + ':',
+                'host'      : host,
+                'port'      : port,
+                'path'      : path,
+                'headers'   : format_http_cookies(cookies, extend({}, headers)),
+                'timeout'   : 1000*timeout // ms
             });
-            return;
-        }
-        protocol = HAS.call(uri, 'scheme') ? uri['scheme'].toLowerCase() : 'http';
-        port = HAS.call(uri, 'port') ? +uri['port'] : ('https' === protocol ? 443 : 80);
-        path = HAS.call(uri, 'path') ? uri['path'] : '/';
-        if (!path.length) path = '/';
-        path += HAS.call(uri, 'query') && uri['query'].length ? ('?' + uri['query']) : '';
+            request.on('response', function(response) {
+                var status = +response.statusCode, chunks = [],
+                    headers_ = parse_http_header(response.headers),
+                    cookies_ = parse_http_cookies(headers_);
 
-        var request = http.request({
-            'method'    : method,
-            'protocol'  : protocol,
-            'host'      : host,
-            'port'      : port,
-            'path'      : path,
-            'headers'   : format_http_cookies(cookies, headers),
-            'timeout'   : 1000*options.timeout // ms
-        });
-        request.on('response', function(response) {
-            var status = response.statusCode, content = '',
-                headers = parse_http_header(response.headers),
-                cookies = parse_http_cookies(headers);
-
-            response.on('data', function(chunk) {
-                content += chunk;
-            });
-            response.on('end', function() {
-                cb(null, {
-                    status  : status,
-                    content : content,
-                    headers : headers,
-                    cookies : cookies
-
+                response.on('data', function(chunk) {
+                    chunks.push('buffer' === return_type ? Buffer.from(chunk) : chunk);
+                });
+                response.on('end', function() {
+                    if (follow_location && (301 <= status && status <= 308) && (headers_['location']) && (m=headers_['location'][0].match(/^\s*(\S+)/i)) && (uri !== m[1]))
+                    {
+                        do_request(m[1], ++redirects);
+                    }
+                    else
+                    {
+                        cb(null, {
+                            status  : status,
+                            content : 'buffer' === return_type ? (Buffer.concat(chunks)) : (chunks.join('')),
+                            headers : headers_,
+                            cookies : cookies_
+                        });
+                    }
                 });
             });
-        });
-        request.on('timeout', function() {
-            cb(new EazyHttpException('Request timeout after '+options.timeout+' secs'), {
-                status  : 0,
-                content : false,
-                headers : {},
-                cookies : []
+            request.on('timeout', function() {
+                cb(new EazyHttpException('Request timeout after '+timeout+' secs'), {
+                    status  : 0,
+                    content : false,
+                    headers : {},
+                    cookies : []
+                });
             });
-        });
-        request.on('error', function(err) {
-            cb(err, {
-                status  : 0,
-                content : false,
-                headers : {},
-                cookies : []
+            request.on('error', function(err) {
+                cb(err, {
+                    status  : 0,
+                    content : false,
+                    headers : {},
+                    cookies : []
+                });
             });
-        });
+            request.end(data);
+        };
+        do_request(uri, 0);
     },
 
     _do_http_fetch: function(method, uri, data, headers, cookies, options, cb) {
-        var status;
+        var self = this, status, return_type = String(self.option('return_type')).toLowerCase();
         fetch(uri, {
             'method'    : method,
-            'headers'   : headers,
-            'body'      : format_data(method, data),
-            'redirect'  : options['redirect'],
+            'headers'   : extend({}, headers),
+            'body'      : data,
+            'redirect'  : !!self.option('follow_location') ? 'follow' : 'manual',
             'keepalive' : false
         }).then(function(response){
             status = response.status;
             headers = parse_http_header(response.headers);
             cookies = parse_http_cookies(headers);
-            return response.text();
+            return 'buffer' === return_type ? response.arrayBuffer() : response.text();
         }).then(function(content) {
-            cb(err, {
+            cb(null, {
                 status  : status,
                 content : content,
                 headers : headers,
                 cookies : cookies
             });
-        }).catch(function(err) {
-            cb(err, {
+        }).catch(function(error) {
+            cb(error, {
                 status  : 0,
                 content : false,
                 headers : {},
@@ -201,21 +272,23 @@ EazyHttp[PROTO] = {
     },
 
     _do_http_xhr: function(method, uri, data, headers, cookies, options, cb) {
-        var xhr = http();
+        var self = this, timeout = parseInt(self.option('timeout')),
+            return_type = String(self.option('return_type')).toLowerCase(),
+            xhr = 'undefined' !== typeof(XMLHttpRequest) ? (new XMLHttpRequest()) : (new ActiveXObject('Microsoft.XMLHTTP'));
         //xhr.onreadystatechange
         // (2 /*HEADERS_RECEIVED*/ === xhr.readyState)
         // (3 /*LOADING*/ === xhr.readyState)
         // (4 /*DONE*/ === xhr.readyState)
         xhr.ontimeout = function() {
-            cb(new EazyHttpException('Request timeout after '+options.timeout+' secs'), {
+            cb(new EazyHttpException('Request timeout after '+timeout+' secs'), {
                 status  : 0,
                 content : false,
                 headers : {},
                 cookies : []
             });
         };
-        xhr.onerror = function(err) {
-            cb(err, {
+        xhr.onerror = function(error) {
+            cb(error, {
                 status  : 0,
                 content : false,
                 headers : {},
@@ -223,16 +296,17 @@ EazyHttp[PROTO] = {
             });
         };
         xhr.onload = function() {
-            var headers = parse_http_header(xhr.getAllResponseHeaders()),
-                cookies = parse_http_cookies(headers);
+            headers = parse_http_header(xhr.getAllResponseHeaders());
+            cookies = parse_http_cookies(headers);
             cb(null, {
                 status  : xhr.status,
-                content : xhr.responseText,
+                content : 'buffer' === return_type ? (new Uint8Array(xhr.response)) : xhr.responseText,
                 headers : headers,
                 cookies : cookies
             });
         };
-        xhr.open(method, uri, true /*,user,pass*/);  // 'true' makes the request asynchronous
+        xhr.responseType = 'arraybuffer'; // must be set, does not affect xhr.responseText
+        xhr.open(method, uri, true/*, user, pass*/);  // 'true' makes the request asynchronous
         for (var name in headers)
         {
             if (HAS.call(headers, name))
@@ -244,8 +318,8 @@ EazyHttp[PROTO] = {
                 }
             }
         }
-        xhr.timeout = 1000*options.timeout; // ms
-        xhr.send(format_data(method, data));
+        xhr.timeout = 1000*timeout; // ms
+        xhr.send(data);
     }
 };
 function EazyHttpException(message)
@@ -262,48 +336,87 @@ function format_data(method, data)
 {
     if ('POST' === method)
     {
-        if (is_string(data))
+        if (isNode)
         {
-            // String
-            /*pass*/
-        }
-        else if (("undefined" !== typeof(FormData)) && (data instanceof FormData))
-        {
-            // FormData
-            /*pass*/
-        }
-        else if (("undefined" !== typeof(URLSearchParams)) && (data instanceof URLSearchParams))
-        {
-            // URLSearchParams
-            /*pass*/
-        }
-        else if (("undefined" !== typeof(File)) && (data instanceof File))
-        {
-            // File
-            /*pass*/
-        }
-        else if (("undefined" !== typeof(Blob)) && (data instanceof Blob))
-        {
-            // Blob
-            /*pass*/
-        }
-        else if (("undefined" !== typeof(ArrayBuffer)) && (data instanceof ArrayBuffer))
-        {
-            // ArrayBuffer
-            /*pass*/
-        }
-        else if (data.buffer && ("undefined" !== typeof(ArrayBuffer)) && (data.buffer instanceof ArrayBuffer))
-        {
-            // TypedArray
-            /*pass*/
-        }
-        else if (is_obj(data))
-        {
-            data = http_build_query(data, '&');
+            if (is_string(data))
+            {
+                // String
+                /*pass*/
+            }
+            else if (("undefined" !== typeof(Buffer)) && (data instanceof Buffer))
+            {
+                // Buffer
+                /*pass*/
+            }
+            else if (("undefined" !== typeof(Uint8Array)) && (data instanceof Uint8Array))
+            {
+                // TypedArray
+                /*pass*/
+            }
+            else if (is_obj(data))
+            {
+                data = http_build_query(data, '&');
+            }
+            else
+            {
+                data = '';
+            }
         }
         else
         {
-            data = '';
+            if (is_string(data))
+            {
+                // String
+                /*pass*/
+            }
+            else if (("undefined" !== typeof(FormData)) && (data instanceof FormData))
+            {
+                // FormData
+                /*pass*/
+            }
+            else if (("undefined" !== typeof(URLSearchParams)) && (data instanceof URLSearchParams))
+            {
+                // URLSearchParams
+                /*pass*/
+            }
+            else if (("undefined" !== typeof(File)) && (data instanceof File))
+            {
+                // File
+                /*pass*/
+            }
+            else if (("undefined" !== typeof(Blob)) && (data instanceof Blob))
+            {
+                // Blob
+                /*pass*/
+            }
+            else if (("undefined" !== typeof(ReadableStream)) && (data instanceof ReadableStream))
+            {
+                // ReadableStream
+                /*pass*/
+            }
+            else if (("undefined" !== typeof(DataView)) && (data instanceof DataView))
+            {
+                // DataView
+                /*pass*/
+            }
+            else if (("undefined" !== typeof(ArrayBuffer)) && (data instanceof ArrayBuffer))
+            {
+                // ArrayBuffer
+                /*pass*/
+            }
+            else if (data.buffer && ("undefined" !== typeof(ArrayBuffer)) && (data.buffer instanceof ArrayBuffer))
+            {
+                // TypedArray
+                /*pass*/
+            }
+            else if (is_obj(data))
+            {
+                data = http_build_query(data, '&');
+            }
+            else
+            {
+                data = '';
+            }
         }
     }
     else
@@ -311,6 +424,88 @@ function format_data(method, data)
         data = '';
     }
     return data;
+}
+function parse_http_header(responseHeader)
+{
+    var responseHeaders = {}, name, lines, parts, line, i, n;
+    // return lowercase headers as in spec
+    if ("undefined" !== typeof(Headers) && (responseHeader instanceof Headers))
+    {
+        responseHeader.forEach(function(value, name) {
+            name = /*ucwords(*/trim(name).toLowerCase()/*, '-')*/;
+            if (HAS.call(responseHeaders, name)) responseHeaders[name].push(trim(value));
+            else responseHeaders[name] = [trim(value)];
+        });
+    }
+    else if (is_obj(responseHeader))
+    {
+        for (name in responseHeader)
+        {
+            if (HAS.call(responseHeader, name))
+            {
+                name = /*ucwords(*/trim(name).toLowerCase()/*, '-')*/;
+                if (HAS.call(responseHeaders, name)) responseHeaders[name].push(trim(value));
+                else responseHeaders[name] = [trim(value)];
+            }
+        }
+    }
+    else
+    {
+        if (is_string(responseHeader)) responseHeader = responseHeader.split(/[\r\n]+/g);
+        if (is_array(responseHeader) && responseHeader.length)
+        {
+            for (i=0,n=responseHeader.length; i<n; ++i)
+            {
+                line = responseHeader[i];
+                if (trim(line).length)
+                {
+                    parts = line.split(':', 2);
+                    if (parts.length > 1)
+                    {
+                        name = /*ucwords(*/trim(parts[0]).toLowerCase()/*, '-')*/;
+                        if (HAS.call(responseHeaders, name)) responseHeaders[name].push(trim(parts[1]));
+                        else responseHeaders[name] = [trim(parts[1])];
+                    }
+                }
+            }
+        }
+    }
+    return responseHeaders;
+}
+function parse_http_cookies(responseHeaders)
+{
+    var cookies = [], cookie, i, n;
+    if (responseHeaders && is_array(responseHeaders['set-cookie']) && responseHeaders['set-cookie'].length)
+    {
+        for (i=0,n=responseHeaders['set-cookie'].length; i<n; ++i)
+        {
+            cookie = parse_cookie(responseHeaders['set-cookie'][i]);
+            if (is_obj(cookie)) cookies.push(cookie);
+        }
+    }
+    return cookies;
+}
+function format_http_cookies(cookies, headers)
+{
+    if (is_array(cookies) && cookies.length)
+    {
+        for (var i=0,n=cookies.length,cookie_str,valid_cookies=[]; i<n; ++i)
+        {
+            if (is_obj(cookies[i]))
+            {
+                cookie_str = format_cookie(cookies[i], false);
+                if (cookie_str.length)
+                {
+                    valid_cookies.push(cookie_str);
+                }
+            }
+        }
+        if (valid_cookies.length)
+        {
+            headers['Cookie'] = (HAS.call(headers, 'Cookie') ? (String(headers['Cookie']) + '; ') : '') + valid_cookies.join('; ');
+        }
+    }
+    return headers;
 }
 function parse_cookie(str, isRaw)
 {
@@ -436,121 +631,17 @@ function format_cookie(cookie, toSet)
 
     return str;
 }
-function parse_http_header(responseHeader)
+function is_string(x)
 {
-    var responseHeaders = {}, name, lines, parts, line, i, n;
-    if ("undefined" !== typeof(Headers) && (responseHeader instanceof Headers))
-    {
-        responseHeader.forEach(function(value, name) {
-            name = ucwords(trim(name).toLowerCase(), '-');
-            if (HAS.call(responseHeaders, name)) responseHeaders[name].push(value);
-            else responseHeaders[name] = [value];
-        });
-    }
-    else if (is_obj(responseHeader))
-    {
-        for (name in responseHeader)
-        {
-            if (HAS.call(responseHeader, name))
-            {
-                name = ucwords(trim(name).toLowerCase(), '-');
-                if (HAS.call(responseHeaders, name)) responseHeaders[name].push(value);
-                else responseHeaders[name] = [value];
-            }
-        }
-    }
-    else
-    {
-        if (is_string(responseHeader)) responseHeader = responseHeader.split("\r\n");
-        if (is_array(responseHeader) && responseHeader.length)
-        {
-            for (i=0,n=responseHeader.length; i<n; ++i)
-            {
-                line = responseHeader[i];
-                if (trim(line).length)
-                {
-                    parts = line.split(':', 2);
-                    if (parts.length > 1)
-                    {
-                        name = ucwords(trim(parts[0]).toLowerCase(), '-');
-                        if (HAS.call(responseHeaders, name)) responseHeaders[name].push(parts[1]);
-                        else responseHeaders[name] = [parts[1]];
-                    }
-                }
-            }
-        }
-    }
-    return responseHeaders;
-}
-function parse_http_cookies(responseHeaders)
-{
-    var cookies = [], cookie, i, n;
-    if (responseHeaders && is_array(responseHeaders['Set-Cookie']) && responseHeaders['Set-Cookie'].length)
-    {
-        for (i=0,n=responseHeaders['Set-Cookie'].length; i<n; ++i)
-        {
-            cookie = parse_cookie(responseHeaders['Set-Cookie'][i]);
-            if (is_obj(cookie)) cookies.push(cookie);
-        }
-    }
-    return cookies;
-}
-function format_http_cookies(cookies, headers, toSet)
-{
-    if (is_array(cookies) && cookies.length)
-    {
-        for (var i=0,n=cookies.length,cookie_str; i<n; ++i)
-        {
-            if (is_obj(cookies[i]))
-            {
-                if (toSet)
-                {
-                    cookie_str = format_cookie(cookies[i], true);
-                    if (cookie_str.length)
-                    {
-                        if (HAS.call(headers, 'Set-Cookie'))
-                        {
-                            if (!is_array(headers['Set-Cookie'])) headers['Set-Cookie'] = [headers['Set-Cookie']];
-                            headers['Set-Cookie'].push(cookie_str);
-                        }
-                        else
-                        {
-                            headers['Set-Cookie'] = cookie_str;
-                        }
-                    }
-                }
-                else
-                {
-                    cookie_str = format_cookie(cookies[i], false);
-                    if (cookie_str.length)
-                    {
-                        if (HAS.call(headers, 'Cookie'))
-                        {
-                            headers['Cookie'] = trim(headers['Cookie']);
-                            headers['Cookie'] += (';' === headers['Cookie'].slice(-1) ? ' ' : '; ') + cookie_str;
-                        }
-                        else
-                        {
-                            headers['Cookie'] = cookie_str;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    return headers;
+    return ('[object String]' === toString.call(x)) || ('string' === typeof(x));
 }
 function is_array(x)
 {
-    return ('[object Array]' === toString.call(x)) || (x instanceof Array);
+    return '[object Array]' === toString.call(x);
 }
 function is_obj(x)
 {
-    return ('[object Object]' === toString.call(x)) || (x instanceof Object);
-}
-function is_string(x)
-{
-    return ('[object String]' === toString.call(x)) || (x instanceof String);
+    return '[object Object]' === toString.call(x);
 }
 function is_number(x)
 {
@@ -609,24 +700,6 @@ function is_numeric_array(o)
     }
     return false;
 }
-function in_array(v, a, strict)
-{
-    var i, l = a.length;
-    if (true === strict)
-    {
-        // Array.indexOf uses strict equality
-        return (0 < l) && (-1 !== a.indexOf(v));
-    }
-    else
-    {
-        for (i=0; i<l; ++i)
-        {
-            if (v == a[i])
-                return true;
-        }
-    }
-    return false;
-}
 function extend(o1, o2, deep)
 {
     var k, v;
@@ -646,6 +719,7 @@ function extend(o1, o2, deep)
     }
     return o1;
 }
+var trim = String[PROTO].trim ? function(s) {return s.trim();} : function(s) {return s.replace(/^\s+|\s+$/g, '');};
 function ucwords(str, sep)
 {
     var words = String(str).split(sep), i, n;
@@ -664,7 +738,7 @@ var uriParser = {
 },
     uriComponent = ['source', 'scheme', 'authority', 'userInfo', 'user', 'pass', 'host', 'port', 'relative', 'path', 'directory', 'file', 'query', 'fragment']
 ;
-function parse_url(s, component, mode/*, queryKey*/)
+function parse_url(s, component, mode)
 {
     var m = uriParser[mode || 'php'].exec(s),
         uri = {}, i = 14//, parser, name
@@ -680,15 +754,6 @@ function parse_url(s, component, mode/*, queryKey*/)
         return uri[component.replace('PHP_URL_', '').toLowerCase()] || null;
     }
 
-    /*if ('php' !== mode)
-    {
-        name = queryKey || 'queryKey';
-        parser = /(?:^|&)([^&=]*)=?([^&]*)/g;
-        uri[name] = {};
-        uri[uriComponent[12]].replace(parser, function ($0, $1, $2) {
-            if ($1) {uri[name][$1] = $2;}
-        });
-    }*/
     if (null != uri.source) delete uri.source;
     return uri;
 }

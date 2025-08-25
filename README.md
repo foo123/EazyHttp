@@ -3,7 +3,7 @@ EazyHttp
 
 EazyHttp, easy, simple and fast HTTP requests for PHP, JavaScript, Python
 
-(**in progress do not use**)
+(**in progress**)
 
 **supports**
 
@@ -20,7 +20,7 @@ EazyHttp, easy, simple and fast HTTP requests for PHP, JavaScript, Python
 
 **JavaScript/Node**
 
-* `http` (if available)
+* `http`/`https` (if available)
 
 **example**
 
@@ -29,10 +29,24 @@ EazyHttp, easy, simple and fast HTTP requests for PHP, JavaScript, Python
 $http = new EazyHttp();
 
 // HTTP GET request, with custom URL params, custom Headers and custom Cookies
-$response = $http->get('https://example.com/', ['foo' => 'bar'], ['User-Agent' => 'EazyHttp'], [['name' => 'a_cookie', 'value' => 'some cookie value']]);
+$response = $http
+->option('timeout', 30/*secs*/) // default
+->get(
+    'https://example.com/',
+    ['foo' => 'bar'],
+    ['User-Agent' => 'EazyHttp'],
+    [['name' => 'a_cookie', 'value' => 'some cookie value']]
+);
 
 // HTTP POST request, with custom POST data, custom Headers and custom Cookies
-$response = $http->post('https://example.com/', ['foo' => 'bar'], ['User-Agent' => 'EazyHttp'], [['name' => 'a_cookie', 'value' => 'some cookie value']]);
+$response = $http
+->option('timeout', 30/*secs*/) // default
+->post(
+    'https://example.com/',
+    ['foo' => 'bar'],
+    ['User-Agent' => 'EazyHttp'],
+    [['name' => 'a_cookie', 'value' => 'some cookie value']]
+);
 
 print_r($response); // stdClass: {status}, {content}, {headers}, {cookies}
 ```
@@ -42,12 +56,28 @@ print_r($response); // stdClass: {status}, {content}, {headers}, {cookies}
 const http = new EazyHttp();
 
 // HTTP GET request, with custom URL params, custom Headers and custom Cookies
-http.get('https://example.com/', {'foo' : 'bar'}, {'User-Agent' : 'EazyHttp'}, [{'name' : 'a_cookie', 'value' : 'some cookie value'}], function(err, response) {
+http
+.option('timeout', 30/*secs*/) // default
+.option('return_type', 'string') // default
+.get(
+    'https://example.com/',
+    {'foo' : 'bar'},
+    {'User-Agent' : 'EazyHttp'},
+    [{'name' : 'a_cookie', 'value' : 'some cookie value'}]
+).then(function(response) {
     console.log(response); // Object: {status}, {content}, {headers}, {cookies}
 });
 
 // HTTP POST request, with custom POST data, custom Headers and custom Cookies
-http.post('https://example.com/', {'foo' : 'bar'}, {'User-Agent' : 'EazyHttp'}, [{'name' : 'a_cookie', 'value' : 'some cookie value'}], function(err, response) {
+http
+.option('timeout', 30/*secs*/) // default
+.option('return_type', 'string') // default
+.post(
+    'https://example.com/',
+    {'foo' : 'bar'},
+    {'User-Agent' : 'EazyHttp'},
+    [{'name' : 'a_cookie', 'value' : 'some cookie value'}]
+).then(function(response) {
     console.log(response); // Object: {status}, {content}, {headers}, {cookies}
 });
 ```
