@@ -15,10 +15,11 @@ class EazyHttp
     public function __construct()
     {
         // some defaults
-        $this->option('timeout',            30); // sec
-        $this->option('follow_location',    1);
-        $this->option('max_redirects',      3);
+        $this->option('timeout',            30); // sec, default
+        $this->option('follow_location',    1); // default
+        $this->option('max_redirects',      3); // default
         $this->option('return_type',        'string'); // default
+        $this->option('methods',            array('curl', 'file', 'socket')); // default
     }
 
     public function option($key, $val = null)
@@ -152,41 +153,53 @@ class EazyHttp
                     $data = '';
                 }
 
-                if (function_exists('curl_init') && function_exists('curl_exec'))
+                $methods = $this->option('methods');
+                if (is_array($methods) && !empty($methods))
                 {
-                    $responseBody = $this->do_http_curl(
-                        $method,
-                        $uri,
-                        $data,
-                        $requestHeaders,
-                        $responseStatus,
-                        $responseHeaders,
-                        $responseCookies
-                    );
-                }
-                elseif (function_exists('stream_context_create') && function_exists('file_get_contents') && ini_get('allow_url_fopen'))
-                {
-                    $responseBody = $this->do_http_file(
-                        $method,
-                        $uri,
-                        $data,
-                        $requestHeaders,
-                        $responseStatus,
-                        $responseHeaders,
-                        $responseCookies
-                    );
-                }
-                elseif (function_exists('fsockopen'))
-                {
-                    $responseBody = $this->do_http_socket(
-                        $method,
-                        $uri,
-                        $data,
-                        $requestHeaders,
-                        $responseStatus,
-                        $responseHeaders,
-                        $responseCookies
-                    );
+                    foreach ($methods as $send_method)
+                    {
+                        $send_method = strtolower(strval($send_method));
+
+                        if (('curl' === $send_method) && function_exists('curl_init') && function_exists('curl_exec'))
+                        {
+                            $responseBody = $this->do_http_curl(
+                                $method,
+                                $uri,
+                                $data,
+                                $requestHeaders,
+                                $responseStatus,
+                                $responseHeaders,
+                                $responseCookies
+                            );
+                            break;
+                        }
+                        elseif (('file' === $send_method) && function_exists('stream_context_create') && function_exists('file_get_contents') && ini_get('allow_url_fopen'))
+                        {
+                            $responseBody = $this->do_http_file(
+                                $method,
+                                $uri,
+                                $data,
+                                $requestHeaders,
+                                $responseStatus,
+                                $responseHeaders,
+                                $responseCookies
+                            );
+                            break;
+                        }
+                        elseif (('socket' === $send_method) && function_exists('fsockopen'))
+                        {
+                            $responseBody = $this->do_http_socket(
+                                $method,
+                                $uri,
+                                $data,
+                                $requestHeaders,
+                                $responseStatus,
+                                $responseHeaders,
+                                $responseCookies
+                            );
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -354,7 +367,7 @@ class EazyHttp
             {
                 $responseStatus = (int)$m[1];
             }
-            $responseHeaders = $this->parse_http_header(empty($responseHeader) ? array() : array_map('trim', explode("\r\n", $responseHeader)));
+            $responseHeaders = $this->parse_http_header(empty($responseHeader) ? array() : array_map('trim', preg_split('#[\\r\\n]+#', $responseHeader)));
             $responseCookies = $this->parse_http_cookies($responseHeaders);
             if (isset($responseHeaders['transfer-encoding']) && ('chunked' === strtolower($responseHeaders['transfer-encoding'][0])))
             {
