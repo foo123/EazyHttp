@@ -7,13 +7,13 @@ EazyHttp, easy, simple and fast HTTP requests for PHP, JavaScript, Python
 
 **supports**
 
-**PHP**
+**PHP (in any desired order)**
 
 * `curl` (if available)
 * `file_get_contents` (if available)
 * `sockets/fsockopen` (if available)
 
-**JavaScript/Browser**
+**JavaScript/Browser (in any desired order)**
 
 * `fetch` (if available)
 * `xmlhttprequest` (if available)
@@ -31,6 +31,7 @@ $http = new EazyHttp();
 // HTTP GET request
 $response = $http
 ->option('timeout', 30/*secs*/) // default
+->option('methods', ['curl', 'file', 'socket']) // default order
 ->get(
     'https://example.com/',
     ['foo' => 'bar'], // custom URL params
@@ -41,6 +42,7 @@ $response = $http
 // HTTP POST request
 $response = $http
 ->option('timeout', 30/*secs*/) // default
+->option('methods', ['curl', 'file', 'socket']) // default order
 ->post(
     'https://example.com/',
     ['foo' => 'bar'], // custom post data
@@ -48,7 +50,7 @@ $response = $http
     [['name' => 'a_cookie', 'value' => 'some cookie value']] // custom Cookies
 );
 
-print_r($response); // stdClass: {status}, {content}, {headers}, {cookies}
+echo json_encode($response); // stdClass: {status}, {content}, {headers}, {cookies}
 ```
 
 **JavaScript (browser and node)**
@@ -59,26 +61,28 @@ const http = new EazyHttp();
 http
 .option('timeout', 30/*secs*/) // default
 .option('return_type', 'string') // default, 'string' or 'buffer'
+.option('methods', ['http', 'fetch', 'xhr']) // default order
 .get(
     'https://example.com/',
     {'foo' : 'bar'}, // custom URL params
     {'User-Agent' : 'EazyHttp'}, // custom Headers
     [{'name' : 'a_cookie', 'value' : 'some cookie value'}] // custom Cookies
-).then(function(response) {
-    console.log(response); // Object: {status}, {content}, {headers}, {cookies}
-});
+).then(
+    (response)  => console.log(JSON.stringify(response)) // Object: {status}, {content}, {headers}, {cookies}
+);
 
 // HTTP POST request
 http
 .option('timeout', 30/*secs*/) // default
 .option('return_type', 'string') // default, 'string' or 'buffer'
+.option('methods', ['http', 'fetch', 'xhr']) // default order
 .post(
     {'foo' : 'bar'}, // custom post data
     {'User-Agent' : 'EazyHttp'}, // custom Headers
     [{'name' : 'a_cookie', 'value' : 'some cookie value'}] // custom Cookies
-).then(function(response) {
-    console.log(response); // Object: {status}, {content}, {headers}, {cookies}
-});
+).then(
+    (response)  => console.log(JSON.stringify(response)) // Object: {status}, {content}, {headers}, {cookies}
+);
 ```
 
 **see also:**

@@ -4,50 +4,40 @@
 const fs = require('fs');
 const EazyHttp = require('../../src/js/EazyHttp.js');
 
-async function test()
+function test()
 {
-    const http = new EazyHttp();
-    let response1, response2, response3, response4;
-
-    try {
-        response1 = await http.option('return_type','string').get('http://localhost:9000/test.txt');
-    } catch (err) {
-        response1 = null;
-        console.error(err);
+    function request(method, uri, data, type)
+    {
+        // returns promise
+        return (new EazyHttp()).option('return_type',type)['POST' === method ? 'post' : 'get'](uri, data);
     }
-    if (response1) fs.writeFile(__dirname+'/test.txt', response1.content, err => {
-        if (err) console.error(err);
-    });
-
-    try {
-        response2 = await http.option('return_type','buffer').get('http://localhost:9000/test.jpg');
-    } catch (err) {
-        response2 = null;
-        console.error(err);
+    function write(file, content)
+    {
+        return new Promise(function(resolve, reject) {
+            fs.writeFile(file, content, err => {
+                if (err) reject(err);
+                else resolve(true);
+            });
+        });
     }
-    if (response2) fs.writeFile(__dirname+'/test.jpg', response2.content, err => {
-        if (err) console.error(err);
-    });
 
-    try {
-        response3 = await http.option('return_type','string').get('http://localhost:9000/test.php', {'foo' : 'bar'});
-    } catch (err) {
-        response3 = null;
-        console.error(err);
-    }
-    if (response3) fs.writeFile(__dirname+'/get-test.php.txt', JSON.stringify(response3), err => {
-        if (err) console.error(err);
-    });
-
-    try {
-        response4 = await http.option('return_type','string').post('http://localhost:9000/test.php', {'foo' : 'bar'});
-    } catch (err) {
-        response4 = null;
-        console.error(err);
-    }
-    if (response4) fs.writeFile(__dirname+'/post-test.php.txt', JSON.stringify(response4), err => {
-        if (err) console.error(err);
-    });
+    return request('GET', 'http://localhost:9000/test.txt', null, 'string').then(
+        (response) => write(__dirname+'/test.txt', response.content)
+    ).then(
+        () => request('GET', 'http://localhost:9000/test.jpg', null, 'buffer')
+    ).then(
+        (response) => write(__dirname+'/test.jpg', Buffer.from(response.content))
+    ).then(
+        () => request('GET', 'http://localhost:9000/test.php', {'foo' : 'bar'}, 'string')
+    ).then(
+        (response) => write(__dirname+'/get-test.php.txt', JSON.stringify(response))
+    ).then(
+        () => request('POST', 'http://localhost:9000/test.php', {'foo' : 'bar'}, 'string')
+    ).then(
+        (response) => write(__dirname+'/post-test.php.txt', JSON.stringify(response))
+    ).catch(
+        (error) => console.error(error)
+    );
 }
 
 test().then(() => process.exit());
