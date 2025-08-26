@@ -27,7 +27,8 @@ var VERSION = '1.0.0',
 
     isNode = ('undefined' !== typeof(global)) && ('[object Global]' === toString.call(global)),
 
-    http = isNode ? require('http') : null, https = isNode ? require('https') : null
+    http = isNode ? require('http') : null,
+    https = isNode ? require('https') : null
 ;
 
 function EazyHttp()
@@ -43,7 +44,7 @@ EazyHttp[PROTO] = {
     constructor: EazyHttp,
 
     opts: null,
-    option: function(key, val = null) {
+    option: function(key, val) {
         var nargs = arguments.length;
         if (1 == nargs)
         {
@@ -130,7 +131,7 @@ EazyHttp[PROTO] = {
             for (i=0,n=methods.length; i<n; ++i)
             {
                 send_method = String(methods[i]).toLowerCase();
-                if (('http' === send_method) && isNode)
+                if (('http' === send_method) && isNode && (https && http))
                 {
                     do_http = '_do_http_server';
                     break;
@@ -183,7 +184,8 @@ EazyHttp[PROTO] = {
         headers = format_http_cookies(cookies, headers);
 
         do_request = function(uri, redirects) {
-            var request, error, opts, m, parts, protocol, host, port, path, query;
+            var request = null, error = null, opts,
+                parts, protocol, host, port, path, query;
             if (redirects > follow_redirects)
             {
                 cb(new EazyHttpException('Too many redirects'), {
@@ -231,8 +233,7 @@ EazyHttp[PROTO] = {
             if (request)
             {
                 request.on('response', function(response) {
-                    var status = +response.statusCode,
-                        body = [],
+                    var m, status = +response.statusCode, body = [],
                         headers_ = parse_http_header(response.headers),
                         cookies_ = parse_http_cookies(headers_);
 
@@ -296,7 +297,9 @@ EazyHttp[PROTO] = {
         headers = format_http_cookies(cookies, headers);
 
         do_request = function(uri, redirects) {
-            var request, error, opts;
+            var request = null, error = null, fetched = false,
+                on_timeout = null, abort_on_timeout = null,
+                opts;
             if (redirects > follow_redirects)
             {
                 cb(new EazyHttpException('Too many redirects'), {
@@ -314,6 +317,12 @@ EazyHttp[PROTO] = {
                 'keepalive' : false
             };
             if ('POST' === method || 'PUT' === method || 'PATCH' === method) opts['body'] = data;
+            if ('undefined' !== typeof(AbortController))
+            {
+                abort_on_timeout = new AbortController();
+                opts['signal'] = abort_on_timeout.signal;
+                on_timeout = setTimeout(function() {if (!fetched) abort_on_timeout.abort();}, 1000*timeout); // ms
+            }
 
             try {
                 request = fetch(uri, opts);
@@ -324,9 +333,13 @@ EazyHttp[PROTO] = {
             if (request)
             {
                 request.then(function(response) {
-                    var m, status = response.status, body,
+                    var m, status = +response.status, body,
                         headers_ = parse_http_header(response.headers),
                         cookies_ = parse_http_cookies(headers_);
+
+                    fetched = true;
+                    if (on_timeout) clearTimeout(on_timeout);
+                    on_timeout = null;
 
                     /*if ((0 < follow_redirects) && (301 <= status && status <= 308) && (headers_['location']) && (m=headers_['location'][0].match(/^\s*(\S+)/i)) && (uri !== m[1]))
                     {
@@ -353,6 +366,10 @@ EazyHttp[PROTO] = {
                         });
                     /*}*/
                 }).catch(function(error) {
+                    fetched = true;
+                    if (on_timeout) clearTimeout(on_timeout);
+                    on_timeout = null;
+
                     cb(error, {
                         status  : 0,
                         content : false,
@@ -375,7 +392,7 @@ EazyHttp[PROTO] = {
     },
 
     _do_http_xhr: function(method, uri, data, headers, cookies, cb) {
-        var self = this, xhr, error,
+        var self = this, xhr = null, error = null,
             timeout = parseInt(self.option('timeout')),
             follow_redirects = parseInt(self.option('follow_redirects')),
             return_type = String(self.option('return_type')).toLowerCase();
@@ -410,13 +427,15 @@ EazyHttp[PROTO] = {
             xhr.onload = function() {
                 if (4/*DONE*/ === xhr.readyState)
                 {
-                    headers = parse_http_header(xhr.getAllResponseHeaders());
-                    cookies = parse_http_cookies(headers);
+                    var status = +xhr.status,
+                        body = 'buffer' === return_type ? (new Uint8Array(xhr.response)) : xhr.responseText,
+                        headers_ = parse_http_header(xhr.getAllResponseHeaders()),
+                        cookies_ = parse_http_cookies(headers_);
                     cb(null, {
-                        status  : xhr.status,
-                        content : 'buffer' === return_type ? (new Uint8Array(xhr.response)) : xhr.responseText,
-                        headers : headers,
-                        cookies : cookies
+                        status  : status,
+                        content : body,
+                        headers : headers_,
+                        cookies : cookies_
                     });
                 }
                 else

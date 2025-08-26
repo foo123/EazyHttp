@@ -5,11 +5,6 @@ const EazyHttp = require('../../src/js/EazyHttp.js');
 
 function test()
 {
-    function request(method, uri)
-    {
-        // returns promise
-        return (new EazyHttp()).get(uri);
-    }
     function write(file, content)
     {
         return new Promise(function(resolve, reject) {
@@ -20,7 +15,7 @@ function test()
         });
     }
 
-    return request('GET', 'https://github.com/foo123/EazyHttp').then(
+    return (new EazyHttp()).get('https://github.com/foo123/EazyHttp').then(
         (response) => write(__dirname+'/test2-https.js.html', response.content)
     ).catch(
         (error) => console.error(error)
