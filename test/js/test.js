@@ -6,10 +6,10 @@ const EazyHttp = require('../../src/js/EazyHttp.js');
 
 function test()
 {
-    function request(method, uri, data, type)
+    function request(method, uri, data, headers, cookies, type)
     {
         // returns promise
-        return (new EazyHttp()).option('return_type',type)['POST' === method ? 'post' : 'get'](uri, data);
+        return (new EazyHttp()).option('return_type',type)['POST' === method ? 'post' : 'get'](uri, data, headers, cookies);
     }
     function write(file, content)
     {
@@ -21,23 +21,23 @@ function test()
         });
     }
 
-    return request('GET', 'http://localhost:9000/test.txt', null, 'string').then(
+    return request('GET', 'http://localhost:9000/test.txt', null, null, null, 'string').then(
         (response) => write(__dirname+'/test.txt', response.content)
     ).then(
-        () => request('GET', 'http://localhost:9000/test.jpg', null, 'buffer')
+        () => request('GET', 'http://localhost:9000/test.jpg', null, null, null, 'buffer')
     ).then(
         (response) => write(__dirname+'/test.jpg', Buffer.from(response.content))
     ).then(
-        () => request('GET', 'http://localhost:9000/test.php', {'foo' : 'bar'}, 'string')
+        () => request('GET', 'http://localhost:9000/test.php', {'foo' : 'bar'}, {}, [{'name' : 'cookie', 'value' : 'value'}], 'string')
     ).then(
         (response) => write(__dirname+'/get-test.php.txt', JSON.stringify(response))
     ).then(
-        () => request('POST', 'http://localhost:9000/test.php', {'foo' : 'bar'}, 'string')
+        () => request('POST', 'http://localhost:9000/test.php', {'foo' : 'bar'}, {}, [{'name' : 'cookie', 'value' : 'value'}], 'string')
     ).then(
         (response) => write(__dirname+'/post-test.php.txt', JSON.stringify(response))
-    ).catch(
+    )/*.catch(
         (error) => console.error(error)
-    );
+    )*/;
 }
 
 test().then(() => process.exit());

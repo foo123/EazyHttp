@@ -59,6 +59,7 @@ EazyHttp[PROTO] = {
         var self = this;
         if ((null == cb) && ('undefined' !== typeof(Promise)))
         {
+            // promisify
             return new Promise(function(resolve, reject) {
                 self._do_http('GET', uri, data, headers, cookies, function(error, response) {
                     if (error) reject(error);
@@ -76,6 +77,7 @@ EazyHttp[PROTO] = {
         var self = this;
         if ((null == cb) && ('undefined' !== typeof(Promise)))
         {
+            // promisify
             return new Promise(function(resolve, reject) {
                 self._do_http('POST', uri, data, headers, cookies, function(error, response) {
                     if (error) reject(error);
@@ -169,7 +171,7 @@ EazyHttp[PROTO] = {
     },
 
     _do_http_server: function(method, uri, data, headers, cookies, cb) {
-        var self = this, do_request,
+        var self = this, request, error, do_request,
             timeout = parseInt(self.option('timeout')),
             follow_location = !!self.option('follow_location'),
             max_redirects = parseInt(self.option('max_redirects')),
@@ -185,7 +187,7 @@ EazyHttp[PROTO] = {
         do_request = function(uri, redirects) {
             if (redirects > max_redirects)
             {
-                cb(new EazyHttpException('Many redirects'), {
+                cb(new EazyHttpException('Too many redirects'), {
                     status  : 0,
                     content : false,
                     headers : {},
@@ -206,55 +208,116 @@ EazyHttp[PROTO] = {
                 });
                 return;
             }
-            protocol = HAS.call(parts, 'scheme') ? parts['scheme'].toLowerCase() : 'http';
-            port = HAS.call(parts, 'port') ? +parts['port'] : ('https' === protocol ? 443 : 80);
-            path = HAS.call(parts, 'path') ? parts['path'] : '/';
+            protocol = (null != parts['scheme']) ? parts['scheme'].toLowerCase() : 'http';
+            port = (null != parts['port']) ? +parts['port'] : ('https' === protocol ? 443 : 80);
+            path = (null != parts['path']) ? parts['path'] : '/';
             if (!path.length) path = '/';
-            path += HAS.call(parts, 'query') && parts['query'].length ? ('?' + parts['query']) : '';
+            path += (null != parts['query']) && parts['query'].length ? ('?' + parts['query']) : '';
 
-            var request = ('https' === protocol ? https : http).request({
-                'method'    : method,
-                'protocol'  : protocol + ':',
-                'host'      : host,
-                'port'      : port,
-                'path'      : path,
-                'headers'   : headers,
-                'timeout'   : 1000*timeout // ms
-            });
-            request.on('response', function(response) {
-                var status = +response.statusCode,
-                    chunks = [],
-                    headers_ = parse_http_header(response.headers),
-                    cookies_ = parse_http_cookies(headers_);
+            try {
+                request = ('https' === protocol ? https : http).request({
+                    'method'    : method,
+                    'protocol'  : protocol + ':',
+                    'host'      : host,
+                    'port'      : port,
+                    'path'      : path,
+                    'headers'   : headers,
+                    'timeout'   : 1000*timeout // ms
+                });
+            } catch (e) {
+                request = null;
+                error = e;
+            }
+            if (request)
+            {
+                request.on('response', function(response) {
+                    var status = +response.statusCode,
+                        chunks = [],
+                        headers_ = parse_http_header(response.headers),
+                        cookies_ = parse_http_cookies(headers_);
 
-                response.on('data', function(chunk) {
-                    chunks.push('buffer' === return_type ? Buffer.from(chunk) : chunk);
+                    response.on('data', function(chunk) {
+                        chunks.push('buffer' === return_type ? Buffer.from(chunk) : chunk);
+                    });
+                    response.on('end', function() {
+                        if (follow_location && (301 <= status && status <= 308) && (headers_['location']) && (m=headers_['location'][0].match(/^\s*(\S+)/i)) && (uri !== m[1]))
+                        {
+                            do_request(m[1], redirects+1);
+                        }
+                        else
+                        {
+                            cb(null, {
+                                status  : status,
+                                content : 'buffer' === return_type ? (Buffer.concat(chunks)) : (chunks.join('')),
+                                headers : headers_,
+                                cookies : cookies_
+                            });
+                        }
+                    });
                 });
-                response.on('end', function() {
-                    if (follow_location && (301 <= status && status <= 308) && (headers_['location']) && (m=headers_['location'][0].match(/^\s*(\S+)/i)) && (uri !== m[1]))
-                    {
-                        do_request(m[1], redirects+1);
-                    }
-                    else
-                    {
-                        cb(null, {
-                            status  : status,
-                            content : 'buffer' === return_type ? (Buffer.concat(chunks)) : (chunks.join('')),
-                            headers : headers_,
-                            cookies : cookies_
-                        });
-                    }
+                request.on('timeout', function() {
+                    cb(new EazyHttpException('Request timeout after '+timeout+' secs'), {
+                        status  : 0,
+                        content : false,
+                        headers : {},
+                        cookies : []
+                    });
                 });
-            });
-            request.on('timeout', function() {
-                cb(new EazyHttpException('Request timeout after '+timeout+' secs'), {
+                request.on('error', function(error) {
+                    cb(error, {
+                        status  : 0,
+                        content : false,
+                        headers : {},
+                        cookies : []
+                    });
+                });
+                if ('POST' === method) request.write(data);
+                request.end();
+            }
+            else
+            {
+                cb(error || new EazyHttpException('No http request'), {
                     status  : 0,
                     content : false,
                     headers : {},
                     cookies : []
                 });
+            }
+        };
+        do_request(uri, 0);
+    },
+
+    _do_http_fetch: function(method, uri, data, headers, cookies, cb) {
+        var self = this, request, error, status,
+            timeout = parseInt(self.option('timeout')),
+            return_type = String(self.option('return_type')).toLowerCase();
+        try {
+            request = fetch(uri, {
+                'method'    : method,
+                'headers'   : format_http_cookies(cookies, headers),
+                'body'      : data,
+                'redirect'  : !!self.option('follow_location') ? 'follow' : 'manual',
+                'keepalive' : false
             });
-            request.on('error', function(error) {
+        } catch (e) {
+            request = null;
+            error = e;
+        }
+        if (request)
+        {
+            request.then(function(response){
+                status = response.status;
+                headers = parse_http_header(response.headers);
+                cookies = parse_http_cookies(headers);
+                return 'buffer' === return_type ? response.arrayBuffer() : response.text();
+            }).then(function(content) {
+                cb(null, {
+                    status  : status,
+                    content : content,
+                    headers : headers,
+                    cookies : cookies
+                });
+            }).catch(function(error) {
                 cb(error, {
                     status  : 0,
                     content : false,
@@ -262,106 +325,98 @@ EazyHttp[PROTO] = {
                     cookies : []
                 });
             });
-            if ('POST' === method) request.write(data);
-            request.end();
-        };
-        do_request(uri, 0);
-    },
-
-    _do_http_fetch: function(method, uri, data, headers, cookies, cb) {
-        var self = this, status,
-            timeout = parseInt(self.option('timeout')),
-            return_type = String(self.option('return_type')).toLowerCase();
-        fetch(uri, {
-            'method'    : method,
-            'headers'   : format_http_cookies(cookies, headers),
-            'body'      : data,
-            'redirect'  : !!self.option('follow_location') ? 'follow' : 'manual',
-            'keepalive' : false
-        }).then(function(response){
-            status = response.status;
-            headers = parse_http_header(response.headers);
-            cookies = parse_http_cookies(headers);
-            return 'buffer' === return_type ? response.arrayBuffer() : response.text();
-        }).then(function(content) {
-            cb(null, {
-                status  : status,
-                content : content,
-                headers : headers,
-                cookies : cookies
-            });
-        }).catch(function(error) {
-            cb(error, {
+        }
+        else
+        {
+            cb(error || new EazyHttpException('No fetch request'), {
                 status  : 0,
                 content : false,
                 headers : {},
                 cookies : []
             });
-        })
+        }
     },
 
     _do_http_xhr: function(method, uri, data, headers, cookies, cb) {
-        var self = this, timeout = parseInt(self.option('timeout')),
-            return_type = String(self.option('return_type')).toLowerCase(),
+        var self = this, xhr, error,
+            timeout = parseInt(self.option('timeout')),
+            return_type = String(self.option('return_type')).toLowerCase();
+        try {
             xhr = 'undefined' !== typeof(XMLHttpRequest) ? (new XMLHttpRequest()) : (new ActiveXObject('Microsoft.XMLHTTP'));
-        //xhr.onreadystatechange
-        // (2 /*HEADERS_RECEIVED*/ === xhr.readyState)
-        // (3 /*LOADING*/ === xhr.readyState)
-        // (4 /*DONE*/ === xhr.readyState)
-        xhr.ontimeout = function() {
-            cb(new EazyHttpException('Request timeout after '+timeout+' secs'), {
-                status  : 0,
-                content : false,
-                headers : {},
-                cookies : []
-            });
-        };
-        xhr.onerror = function(error) {
-            cb(error, {
-                status  : 0,
-                content : false,
-                headers : {},
-                cookies : []
-            });
-        };
-        xhr.onload = function() {
-            if (4/*DONE*/ === xhr.readyState)
-            {
-                headers = parse_http_header(xhr.getAllResponseHeaders());
-                cookies = parse_http_cookies(headers);
-                cb(null, {
-                    status  : xhr.status,
-                    content : 'buffer' === return_type ? (new Uint8Array(xhr.response)) : xhr.responseText,
-                    headers : headers,
-                    cookies : cookies
-                });
-            }
-            else
-            {
-                cb(new EazyHttpException('Request incomplete'), {
+        } catch (e) {
+            xhr = null;
+            error = e;
+        }
+        if (xhr)
+        {
+            //xhr.onreadystatechange
+            // (2 /*HEADERS_RECEIVED*/ === xhr.readyState)
+            // (3 /*LOADING*/ === xhr.readyState)
+            // (4 /*DONE*/ === xhr.readyState)
+            xhr.ontimeout = function() {
+                cb(new EazyHttpException('Request timeout after '+timeout+' secs'), {
                     status  : 0,
                     content : false,
                     headers : {},
                     cookies : []
                 });
-            }
-        };
-        xhr.responseType = 'buffer' === return_type ? 'arraybuffer' : 'text';
-        xhr.timeout = 1000*timeout; // ms
-        xhr.open(method, uri, true/*, user, pass*/);  // 'true' makes the request asynchronous
-        headers = format_http_cookies(cookies, headers);
-        for (var name in headers)
-        {
-            if (HAS.call(headers, name))
+            };
+            xhr.onerror = function(error) {
+                cb(error, {
+                    status  : 0,
+                    content : false,
+                    headers : {},
+                    cookies : []
+                });
+            };
+            xhr.onload = function() {
+                if (4/*DONE*/ === xhr.readyState)
+                {
+                    headers = parse_http_header(xhr.getAllResponseHeaders());
+                    cookies = parse_http_cookies(headers);
+                    cb(null, {
+                        status  : xhr.status,
+                        content : 'buffer' === return_type ? (new Uint8Array(xhr.response)) : xhr.responseText,
+                        headers : headers,
+                        cookies : cookies
+                    });
+                }
+                else
+                {
+                    cb(new EazyHttpException('Request incomplete'), {
+                        status  : 0,
+                        content : false,
+                        headers : {},
+                        cookies : []
+                    });
+                }
+            };
+            xhr.responseType = 'buffer' === return_type ? 'arraybuffer' : 'text';
+            xhr.timeout = 1000*timeout; // ms
+            xhr.open(method, uri, true/*, user, pass*/);  // 'true' makes the request asynchronous
+            headers = format_http_cookies(cookies, headers);
+            for (var name in headers)
             {
-                try {
-                xhr.setRequestHeader(name, headers[name]);
-                } catch (e) {
-                /*pass*/
+                if (HAS.call(headers, name))
+                {
+                    try {
+                    xhr.setRequestHeader(name, headers[name]);
+                    } catch (e) {
+                    /*pass*/
+                    }
                 }
             }
+            xhr.send(data);
         }
-        xhr.send(data);
+        else
+        {
+            cb(error || new EazyHttpException('No XMLHttpRequest request'), {
+                status  : 0,
+                content : false,
+                headers : {},
+                cookies : []
+            });
+        }
     }
 };
 function EazyHttpException(message)
@@ -398,10 +453,7 @@ function format_data(method, data, headers)
             else if (is_obj(data))
             {
                 data = http_build_query(data, '&');
-                if (!HAS.call(headers, 'Content-Type'))
-                {
-                    headers['Content-Type'] = 'application/x-www-form-urlencoded';
-                }
+                headers['Content-Type'] = 'application/x-www-form-urlencoded';
             }
             else
             {
@@ -458,10 +510,7 @@ function format_data(method, data, headers)
             else if (is_obj(data))
             {
                 data = http_build_query(data, '&');
-                if (!HAS.call(headers, 'Content-Type'))
-                {
-                    headers['Content-Type'] = 'application/x-www-form-urlencoded';
-                }
+                headers['Content-Type'] = 'application/x-www-form-urlencoded';
             }
             else
             {
@@ -703,7 +752,10 @@ function is_callable(x)
 }
 function array_keys(o)
 {
-    if ('function' === typeof Object.keys) return Object.keys(o);
+    if ('function' === typeof Object.keys)
+    {
+        return Object.keys(o);
+    }
     var v, k, l;
     if (is_array(o))
     {
@@ -727,7 +779,10 @@ function array_keys(o)
 function array_values(o)
 {
     if (is_array(o)) return o;
-    if ('function' === typeof Object.values) return Object.values(o);
+    if ('function' === typeof Object.values)
+    {
+        return Object.values(o);
+    }
     var v = [], k;
     for (k in o)
     {
@@ -780,32 +835,13 @@ function ucwords(str, sep)
     }
     return str;
 }
-// adapted from https://github.com/kvz/phpjs
-var uriParser = {
-    php: /^(?:([^:\/?#]+):)?(?:\/\/()(?:(?:()(?:([^:@]*):?([^:@]*))?@)?([^:\/?#]*)(?::(\d*))?))?()(?:(()(?:(?:[^?#\/]*\/)*)()(?:[^?#]*))(?:\?([^#]*))?(?:#(.*))?)/,
-    strict: /^(?:([^:\/?#]+):)?(?:\/\/((?:(([^:@]*):?([^:@]*))?@)?([^:\/?#]*)(?::(\d*))?))?((((?:[^?#\/]*\/)*)([^?#]*))(?:\?([^#]*))?(?:#(.*))?)/,
-    loose: /^(?:(?![^:@]+:[^:@\/]*@)([^:\/?#.]+):)?(?:\/\/\/?)?((?:(([^:@]*):?([^:@]*))?@)?([^:\/?#]*)(?::(\d*))?)(((\/(?:[^?#](?![^?#\/]*\.[^?#\/.]+(?:[?#]|$)))*\/?)?([^?#\/]*))(?:\?([^#]*))?(?:#(.*))?)/ // Added one optional slash to post-scheme to catch file:/// (should restrict this)
-},
-    uriComponent = ['source', 'scheme', 'authority', 'userInfo', 'user', 'pass', 'host', 'port', 'relative', 'path', 'directory', 'file', 'query', 'fragment']
-;
-function parse_url(s, component, mode)
+function str_replace(from, to, str)
 {
-    var m = uriParser[mode || 'php'].exec(s),
-        uri = {}, i = 14//, parser, name
-    ;
-    while (i--)
+    for (var i=0,n=from.length; i<n; ++i)
     {
-        if (m[i])  uri[uriComponent[i]] = m[i]
+        str = str.split(from[i]).join(to[i]);
     }
-    if (HAS.call(uri, 'port')) uri['port'] = parseInt(uri['port'], 10);
-
-    if (component)
-    {
-        return uri[component.replace('PHP_URL_', '').toLowerCase()] || null;
-    }
-
-    if (null != uri.source) delete uri.source;
-    return uri;
+    return str;
 }
 function rawurldecode(str)
 {
@@ -831,8 +867,69 @@ function urlencode(str)
     return rawurlencode(str).split('%20').join('+');
 }
 // adapted from https://github.com/kvz/phpjs
+var uriParser = {
+        php: /^(?:([^:\/?#]+):)?(?:\/\/()(?:(?:()(?:([^:@]*):?([^:@]*))?@)?([^:\/?#]*)(?::(\d*))?))?()(?:(()(?:(?:[^?#\/]*\/)*)()(?:[^?#]*))(?:\?([^#]*))?(?:#(.*))?)/,
+        strict: /^(?:([^:\/?#]+):)?(?:\/\/((?:(([^:@]*):?([^:@]*))?@)?([^:\/?#]*)(?::(\d*))?))?((((?:[^?#\/]*\/)*)([^?#]*))(?:\?([^#]*))?(?:#(.*))?)/,
+        loose: /^(?:(?![^:@]+:[^:@\/]*@)([^:\/?#.]+):)?(?:\/\/\/?)?((?:(([^:@]*):?([^:@]*))?@)?([^:\/?#]*)(?::(\d*))?)(((\/(?:[^?#](?![^?#\/]*\.[^?#\/.]+(?:[?#]|$)))*\/?)?([^?#\/]*))(?:\?([^#]*))?(?:#(.*))?)/ // Added one optional slash to post-scheme to catch file:/// (should restrict this)
+    },
+    uriComponent = ['source', 'scheme', 'authority', 'userInfo', 'user', 'pass', 'host', 'port', 'relative', 'path', 'directory', 'file', 'query', 'fragment']
+;
+function parse_url(str, component, mode)
+{
+    var uri = null, m, i;
+    if ('undefined' !== typeof(URL))
+    {
+        try {
+            m = new URL(str);
+        } catch (e) {
+            m = null;
+        }
+        if (m)
+        {
+            uri = {};
+            if (m.protocol) uri['scheme'] = m.protocol.slice(0, -1);
+            if (m.username) uri['user'] = m.username;
+            if (m.password) uri['pass'] = m.password;
+            if (m.hostname) uri['host'] = m.hostname;
+            if (m.port && m.port.length) uri['port'] = m.port;
+            if (m.pathname && m.pathname.length) uri['path'] = m.pathname;
+            else uri['path'] = '';
+            if (m.search && m.search.length) uri['query'] = m.search.slice(1);
+            else uri['query'] = '';
+            if (m.hash && m.hash.length) uri['fragment'] = m.hash.slice(1);
+            else uri['fragment'] = '';
+        }
+    }
+    if (!uri)
+    {
+        m = uriParser[mode || 'php'].exec(str);
+        i = uriComponent.length;
+        uri = {};
+        while (i--) if (i && m[i]) uri[uriComponent[i]] = m[i];
+    }
+    if (HAS.call(uri, 'port')) uri['port'] = parseInt(uri['port'], 10);
+
+    if (component)
+    {
+        return uri[component.replace('PHP_URL_', '').toLowerCase()] || null;
+    }
+
+    return uri;
+}
 function parse_str(str)
 {
+    /*if ('undefined' !== typeof(URLSearchParams))
+    {
+        // NOTE: nesting is not supported
+        var params;
+        try {
+            params = new URLSearchParams(str);
+        } catch (e) {
+            params = null;
+        }
+        if (params) return params;
+    }*/
+
     var strArr = str.replace(/^&+|&+$/g, '').split('&'),
         sal = strArr.length,
         i, j, ct, p, lastObj, obj, chr, tmp, key, value,
@@ -946,7 +1043,22 @@ function parse_str(str)
     }
     return array;
 }
-// adapted from https://github.com/kvz/phpjs
+function flatten(input, output, prefix)
+{
+    if (is_obj(input) || is_array(input))
+    {
+        for (var k=array_keys(input),i=0,n=k.length; i<n; ++i)
+        {
+            var key = k[i], val = input[key],
+                name = String((null == prefix) ? key : (prefix+'['+key+']'));
+
+            if (is_obj(val) || is_array(val)) output = flatten(val, output, name);
+            else output[name] = val;
+        }
+        return output;
+    }
+    return input;
+}
 function http_build_query_helper(key, val, arg_separator, PHP_QUERY_RFC3986)
 {
     var k, tmp, encode = PHP_QUERY_RFC3986 ? rawurlencode : urlencode;
@@ -980,6 +1092,23 @@ function http_build_query_helper(key, val, arg_separator, PHP_QUERY_RFC3986)
 }
 function http_build_query(data, arg_separator, PHP_QUERY_RFC3986)
 {
+    if ('undefined' !== typeof(URLSearchParams))
+    {
+        // NOTE: nesting is handled via flatten
+        var params;
+        try {
+            params = new URLSearchParams(flatten(data, {}));
+        } catch (e) {
+            params = null;
+        }
+        if (params)
+        {
+            params = params.toString();
+            if ('&' !== arg_separator) params = params.split('&').join(arg_separator);
+            return params;
+        }
+    }
+
     var value, key, query, tmp = [];
 
     if (arguments.length < 2) arg_separator = "&";
@@ -994,14 +1123,6 @@ function http_build_query(data, arg_separator, PHP_QUERY_RFC3986)
     }
 
     return tmp.join(arg_separator);
-}
-function str_replace(from, to, str)
-{
-    for (var i=0,n=from.length; i<n; ++i)
-    {
-        str = str.split(from[i]).join(to[i]);
-    }
-    return str;
 }
 
 // export it

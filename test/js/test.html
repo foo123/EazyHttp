@@ -9,7 +9,7 @@
 <h2>Open console</h2>
 <form id="form" action="/test.php" method="post" enctype="application/x-www-form-urlencoded" onsubmit="return do_request(this);">
   <fieldset>
-    <p>foo: <input type="text" name="foo" value="bar" /></p>
+    <p>foo: <input type="text" name="foo[0]" value="bar" /></p>
     <p><input type="submit" value="Submit" /> </p>
   </fieldset>
 </form>
@@ -17,8 +17,8 @@
 <script>
 function do_request(form, uri)
 {
-    (new EazyHttp()).option('methods',['fetch']).option('return_type','string').post('http://localhost:9000/test.php', new FormData(form)).then((response) => console.log(JSON.stringify(response)));
-    (new EazyHttp()).option('methods',['xhr']).option('return_type','string').post('http://localhost:9000/test.php', {foo:'baz'}).then((response) => console.log(JSON.stringify(response)));
+    (new EazyHttp()).option('methods',['fetch']).post('http://localhost:9000/test.php', new FormData(form), {}, [{'name' : 'cookie', 'value' : 'value'}]).then((response) => console.log(JSON.stringify(response)));
+    (new EazyHttp()).option('methods',['xhr']).post('http://localhost:9000/test.php', {'foo':['bar']}, {}, [{'name' : 'cookie', 'value' : 'value'}]).then((response) => console.log(JSON.stringify(response)));
     return false;
 }
 </script>

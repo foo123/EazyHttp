@@ -136,8 +136,7 @@ class EazyHttp
                 $hs = array_merge(array(), $headers); $headers = array();
                 foreach ($hs as $name => $value) $headers[ucwords(strtolower(trim($name)), '-')] = $value;
                 $headers = array_merge(array('User-Agent' => 'EazyHttp', 'Accept' => '*/*'), $headers);
-
-                if (('POST' === $method) && !isset($headers['Content-Type']))
+                if (('POST' === $method) && is_array($data))
                 {
                     $headers['Content-Type'] = 'application/x-www-form-urlencoded';
                 }
@@ -156,11 +155,11 @@ class EazyHttp
                 $methods = $this->option('methods');
                 if (is_array($methods) && !empty($methods))
                 {
-                    foreach ($methods as $send_method)
+                    foreach ($methods as $do_http)
                     {
-                        $send_method = strtolower(strval($send_method));
+                        $do_http = strtolower(strval($do_http));
 
-                        if (('curl' === $send_method) && function_exists('curl_init') && function_exists('curl_exec'))
+                        if (('curl' === $do_http) && function_exists('curl_init') && function_exists('curl_exec'))
                         {
                             $responseBody = $this->do_http_curl(
                                 $method,
@@ -173,7 +172,7 @@ class EazyHttp
                             );
                             break;
                         }
-                        elseif (('file' === $send_method) && function_exists('stream_context_create') && function_exists('file_get_contents') && ini_get('allow_url_fopen'))
+                        elseif (('file' === $do_http) && function_exists('stream_context_create') && function_exists('file_get_contents') && ini_get('allow_url_fopen'))
                         {
                             $responseBody = $this->do_http_file(
                                 $method,
@@ -186,7 +185,7 @@ class EazyHttp
                             );
                             break;
                         }
-                        elseif (('socket' === $send_method) && function_exists('fsockopen'))
+                        elseif (('socket' === $do_http) && function_exists('fsockopen'))
                         {
                             $responseBody = $this->do_http_socket(
                                 $method,
@@ -694,17 +693,18 @@ class EazyHttp
 
     protected function flatten($input, $output = array(), $prefix = null)
     {
-        if (!empty($input))
+        if (is_array($input) || is_object($input))
         {
-            foreach ($input as $key => $val)
+            foreach ((array)$input as $key => $val)
             {
-                $name = empty($prefix) ? $key : ($prefix."[$key]");
+                $name = (string)(empty($prefix) ? $key : ($prefix."[$key]"));
 
-                if (is_array($val)) $output = $this->flatten($val, $output, $name);
+                if (is_array($val) || is_object($val)) $output = $this->flatten($val, $output, $name);
                 else $output[$name] = $val;
             }
+            return $output;
         }
-        return $output;
+        return $input;
     }
 }
 class EazyHttpException extends Exception
