@@ -81,6 +81,7 @@ http
 .option('methods',              ['http', 'fetch', 'xhr']) // default order
 .option('return_type',          'string') // default, 'string' or 'buffer'
 .post(
+    'https://example.com/',
     {'foo' : 'bar'}, // custom post data
     {'User-Agent' : 'EazyHttp'}, // custom Headers
     [{'name' : 'a_cookie', 'value' : 'some cookie value'}] // custom Cookies

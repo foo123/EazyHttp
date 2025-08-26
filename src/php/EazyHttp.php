@@ -119,11 +119,16 @@ class EazyHttp
             $method = strtoupper((string)$method);
             if (!in_array($method, array('POST', 'PUT', 'PATCH'))) $method = 'GET';
 
+            if (is_object($data))
+            {
+                $data = (array)$data;
+            }
+
             if ('client' === $type)
             {
                 if (!('POST' === $method || 'PUT' === $method || 'PATCH' === $method))
                 {
-                    $uri .= is_array($data) || is_object($data) ? ((false === strpos($uri, '?') ? '?' : '&') . http_build_query((array)$data, '', '&')) : '';
+                    $uri .= is_array($data) ? ((false === strpos($uri, '?') ? '?' : '&') . http_build_query($data, '', '&')) : '';
                     $data = '';
                 }
                 $responseBody = $this->do_http_client(
@@ -137,7 +142,7 @@ class EazyHttp
                 $hs = array_merge(array(), $headers); $headers = array();
                 foreach ($hs as $name => $value) $headers[ucwords(strtolower(trim($name)), '-')] = $value;
                 $headers = array_merge(array('User-Agent' => 'EazyHttp', 'Accept' => '*/*'), $headers);
-                if (('POST' === $method || 'PUT' === $method || 'PATCH' === $method) && (is_array($data) || is_object($data)))
+                if (('POST' === $method || 'PUT' === $method || 'PATCH' === $method) && is_array($data))
                 {
                     $headers['Content-Type'] = 'application/x-www-form-urlencoded';
                 }
@@ -145,11 +150,11 @@ class EazyHttp
 
                 if ('POST' === $method || 'PUT' === $method || 'PATCH' === $method)
                 {
-                    $data = is_array($data) || is_object($data) ? http_build_query((array)$data, '', '&') : (is_string($data) ? $data : '');
+                    $data = is_array($data) ? http_build_query($data, '', '&') : (is_string($data) ? $data : '');
                 }
                 else
                 {
-                    $uri .= is_array($data) || is_object($data) ? ((false === strpos($uri, '?') ? '?' : '&') . http_build_query((array)$data, '', '&')) : '';
+                    $uri .= is_array($data) ? ((false === strpos($uri, '?') ? '?' : '&') . http_build_query($data, '', '&')) : '';
                     $data = '';
                 }
 
