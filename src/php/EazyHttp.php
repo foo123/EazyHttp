@@ -1,8 +1,10 @@
 <?php
 /**
-*    EazyHttp
-*    easy, simple and fast HTTP requests for PHP, JavaScript, Python
-*    https://github.com/foo123/EazyHttp
+*   EazyHttp
+*   easy, simple and fast HTTP requests for PHP, JavaScript, Python
+*   @version: 1.0.0
+*
+*   https://github.com/foo123/EazyHttp
 **/
 if (!class_exists('EazyHttp', false))
 {
@@ -16,8 +18,7 @@ class EazyHttp
     {
         // some defaults
         $this->option('timeout',            30); // sec, default
-        $this->option('follow_location',    1); // default
-        $this->option('max_redirects',      3); // default
+        $this->option('follow_redirects',   3); // default
         $this->option('return_type',        'string'); // default
         $this->option('methods',            array('curl', 'file', 'socket')); // default
     }
@@ -102,9 +103,9 @@ class EazyHttp
 
     protected function do_http($method = 'GET', $uri = '', $data = null, $headers = null, $cookies = null, &$responseBody = '', &$responseStatus = 0, &$responseHeaders = null, &$responseCookies = null, $type = 'server')
     {
-        // TODO: support POST files ??
-        // TODO: support receive binary data ??
-        // TODO: support more methods, eg PUT, DELETE, ..
+        // for POST files user can pass the multipart encoded data and set Content-Type
+        // binary data are passed also as strings and set appropriate Content-Type
+        // for PUT, PATCH and DELETE methods code is ready
         if (empty($headers)) $headers = array();
         if (empty($cookies)) $cookies = array();
 
@@ -214,8 +215,8 @@ class EazyHttp
         // setup
         $responseHeader = array();
         curl_setopt($curl, CURLOPT_RETURNTRANSFER,  true);
-        curl_setopt($curl, CURLOPT_FOLLOWLOCATION,  !empty($this->option('follow_location')));
-        curl_setopt($curl, CURLOPT_MAXREDIRS,       intval($this->option('max_redirects')));
+        curl_setopt($curl, CURLOPT_FOLLOWLOCATION,  0 < intval($this->option('follow_redirects')));
+        curl_setopt($curl, CURLOPT_MAXREDIRS,       intval($this->option('follow_redirects')));
         curl_setopt($curl, CURLOPT_TIMEOUT,         intval($this->option('timeout'))); // sec
         curl_setopt($curl, CURLOPT_HEADERFUNCTION,  function($curl, $header) use (&$responseHeader) {
             $responseHeader[] = trim($header);
@@ -272,8 +273,8 @@ class EazyHttp
                 'method'            => $method,
                 'header'            => $requestHeader,
                 'content'           => (string)$requestBody,
-                'follow_location'   => !empty($this->option('follow_location')),
-                'max_redirects'     => intval($this->option('max_redirects')),
+                'follow_location'   => 0 < intval($this->option('follow_redirects')),
+                'max_redirects'     => intval($this->option('follow_redirects')),
                 'timeout'           => floatval($this->option('timeout')), // sec
                 'ignore_errors'     => true,
             ),
@@ -307,10 +308,9 @@ class EazyHttp
     {
         set_time_limit(0);
         $timeout = intval($this->option('timeout')); // sec
-        $follow_location = !empty($this->option('follow_location'));
-        $max_redirects = intval($this->option('max_redirects'));
+        $follow_redirects = intval($this->option('follow_redirects'));
         $redirects = 0;
-        while ($redirects <= $max_redirects)
+        while ($redirects <= $follow_redirects)
         {
             $parts = parse_url($uri);
             if (!isset($parts['host']))
@@ -354,10 +354,26 @@ class EazyHttp
             fwrite($fp, $request);
 
             // receive response
-            while (!feof($fp)) $response .= fread($fp, $chunk);
+            $timedout = false;
+            $startTime = microtime(true);
+            while (!feof($fp))
+            {
+                if (microtime(true) - $startTime > $timeout)
+                {
+                    $timedout = true;
+                    break;
+                }
+                $response .= fread($fp, $chunk);
+            }
 
             // close socket
             fclose($fp);
+
+            if ($timedout)
+            {
+                $responseStatus = 0;
+                return false;
+            }
 
             // parse headers and content
             $response = explode("\r\n\r\n", $response, 2);
@@ -374,7 +390,7 @@ class EazyHttp
                 // https://en.wikipedia.org/wiki/Chunked_transfer_encoding
                 $responseBody = $this->parse_chunked($responseBody);
             }
-            if ($follow_location && (301 <= $responseStatus && $responseStatus <= 308) && preg_match('#Location:\\s*(\\S+)#i', $responseHeader, $m) && ($uri !== $m[1]))
+            if ((0 < $follow_redirects) && (301 <= $responseStatus && $responseStatus <= 308) && preg_match('#Location:\\s*(\\S+)#i', $responseHeader, $m) && ($uri !== $m[1]))
             {
                 ++$redirects;
                 $uri = $m[1];
@@ -390,22 +406,22 @@ class EazyHttp
 
     protected function do_http_client($method, $uri, $requestBody = '')
     {
-        switch (strtoupper($method))
+        switch ($method)
         {
             case 'POST':
-            if (!empty($requestBody))
+            case 'PUT':
+            case 'PATCH':
+            if (is_string($requestBody))
             {
-                if (is_array($requestBody))
-                {
-                    $requestData = $requestBody;
-                }
-                else
-                {
-                    $requestData = array();
-                    @parse_str((string)$requestBody, $requestData);
-                }
-                $requestData = $this->flatten($requestData);
-                $formData = implode('', array_map(function($name, $value) {return '<input type="hidden" name="'.$name.'" value="'.$value.'" />';}, array_keys($requestData), $requestData));
+                $parsedBody = array();
+                @parse_str($requestBody, $parsedBody);
+                $requestBody = $parsedBody;
+                $parsedBody = null;
+            }
+            if (is_array($requestBody) || is_object($requestBody))
+            {
+                $requestData = $this->flatten((array)$requestBody);
+                $formData = implode('', array_map(function($name, $value) {return '<input type="hidden" name="'.htmlspecialchars($name).'" value="'.htmlspecialchars($value).'" />';}, array_keys($requestData), $requestData));
             }
             else
             {
@@ -414,7 +430,7 @@ class EazyHttp
             try {
                 @header('Content-Type: text/html; charset=UTF-8', true, 200);
                 @header('Date: '.$this->datetime(time()), true, 200);
-                echo ('<!DOCTYPE html><html><head><meta http-equiv="content-type" content="text/html; charset=UTF-8"/><title>POST '.$uri.'</title></head><body onload="do_post();"><form name="post_form" id="post_form" method="post" enctype="application/x-www-form-urlencoded" action="'.$uri.'">'.$formData.'</form><script type="text/javascript">function do_post() {document.post_form.submit();}</script></body></html>');
+                echo ('<!DOCTYPE html><html><head><meta http-equiv="content-type" content="text/html; charset=UTF-8"/><title>'.$method.' '.$uri.'</title></head><body onload="do_send();"><form name="send_form" id="send_form" method="'.$method.'" enctype="application/x-www-form-urlencoded" action="'.$uri.'">'.$formData.'</form><script type="text/javascript">function do_send() {document.send_form.submit();}</script></body></html>');
             } catch (Exception $e) {
             }
             break;

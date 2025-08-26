@@ -1,7 +1,9 @@
 /**
-*    EazyHttp
-*    easy, simple and fast HTTP requests for PHP, JavaScript, Python
-*    https://github.com/foo123/EazyHttp
+*   EazyHttp
+*   easy, simple and fast HTTP requests for PHP, JavaScript, Python
+*   @version: 1.0.0
+*
+*   https://github.com/foo123/EazyHttp
 **/
 !function(root, name, factory) {
 "use strict";
@@ -33,8 +35,7 @@ function EazyHttp()
     this.opts = {};
     // some defaults
     this.option('timeout',          30); // sec, default
-    this.option('follow_location',  1); // default
-    this.option('max_redirects',    3); // default
+    this.option('follow_redirects', 3); // default
     this.option('return_type',      'string'); // default
     this.option('methods',          ['http', 'fetch', 'xhr']); // default
 }
@@ -95,6 +96,9 @@ EazyHttp[PROTO] = {
         var self = this, hs, name, methods, i, n,
             send_method, do_http = null, cb_called = false;
 
+        // for POST files user can pass the multipart encoded data and set Content-Type
+        // binary data are passed as Buffers/Uint8 and set appropriate Content-Type
+        // for PUT, PATCH and DELETE methods code is ready
         method = String(method).toUpperCase();
         if (!('POST' === method || 'PUT' === method || 'PATCH' === method)) method = 'GET';
 
@@ -173,15 +177,14 @@ EazyHttp[PROTO] = {
     _do_http_server: function(method, uri, data, headers, cookies, cb) {
         var self = this, do_request,
             timeout = parseInt(self.option('timeout')),
-            follow_location = !!self.option('follow_location'),
-            max_redirects = parseInt(self.option('max_redirects')),
+            follow_redirects = parseInt(self.option('follow_redirects')),
             return_type = String(self.option('return_type')).toLowerCase();
 
         headers = format_http_cookies(cookies, headers);
 
         do_request = function(uri, redirects) {
             var request, error, opts, m, parts, protocol, host, port, path, query;
-            if (redirects > max_redirects)
+            if (redirects > follow_redirects)
             {
                 cb(new EazyHttpException('Too many redirects'), {
                     status  : 0,
@@ -237,7 +240,7 @@ EazyHttp[PROTO] = {
                         body.push('buffer' === return_type ? Buffer.from(chunk) : chunk);
                     });
                     response.on('end', function() {
-                        if (follow_location && (301 <= status && status <= 308) && (headers_['location']) && (m=headers_['location'][0].match(/^\s*(\S+)/i)) && (uri !== m[1]))
+                        if ((0 < follow_redirects) && (301 <= status && status <= 308) && (headers_['location']) && (m=headers_['location'][0].match(/^\s*(\S+)/i)) && (uri !== m[1]))
                         {
                             do_request(m[1], redirects+1);
                         }
@@ -287,15 +290,14 @@ EazyHttp[PROTO] = {
     _do_http_fetch: function(method, uri, data, headers, cookies, cb) {
         var self = this, do_request,
             timeout = parseInt(self.option('timeout')),
-            follow_location = !!self.option('follow_location'),
-            max_redirects = parseInt(self.option('max_redirects')),
+            follow_redirects = parseInt(self.option('follow_redirects')),
             return_type = String(self.option('return_type')).toLowerCase();
 
         headers = format_http_cookies(cookies, headers);
 
         do_request = function(uri, redirects) {
             var request, error, opts;
-            if (redirects > max_redirects)
+            if (redirects > follow_redirects)
             {
                 cb(new EazyHttpException('Too many redirects'), {
                     status  : 0,
@@ -308,7 +310,7 @@ EazyHttp[PROTO] = {
             opts = {
                 'method'    : method,
                 'headers'   : headers,
-                'redirect'  : follow_location ? 'follow' : 'manual',
+                'redirect'  : 0 < follow_redirects ? 'follow' : 'manual',
                 'keepalive' : false
             };
             if ('POST' === method || 'PUT' === method || 'PATCH' === method) opts['body'] = data;
@@ -321,12 +323,12 @@ EazyHttp[PROTO] = {
             }
             if (request)
             {
-                request.then(function(response){
+                request.then(function(response) {
                     var m, status = response.status, body,
                         headers_ = parse_http_header(response.headers),
                         cookies_ = parse_http_cookies(headers_);
 
-                    /*if (follow_location && (301 <= status && status <= 308) && (headers_['location']) && (m=headers_['location'][0].match(/^\s*(\S+)/i)) && (uri !== m[1]))
+                    /*if ((0 < follow_redirects) && (301 <= status && status <= 308) && (headers_['location']) && (m=headers_['location'][0].match(/^\s*(\S+)/i)) && (uri !== m[1]))
                     {
                         // does not work, response.redirected is after the fact and inaccessible
                         do_request(m[1], redirects+1);
@@ -375,6 +377,7 @@ EazyHttp[PROTO] = {
     _do_http_xhr: function(method, uri, data, headers, cookies, cb) {
         var self = this, xhr, error,
             timeout = parseInt(self.option('timeout')),
+            follow_redirects = parseInt(self.option('follow_redirects')),
             return_type = String(self.option('return_type')).toLowerCase();
         try {
             xhr = 'undefined' !== typeof(XMLHttpRequest) ? (new XMLHttpRequest()) : (new ActiveXObject('Microsoft.XMLHTTP'));

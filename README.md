@@ -3,7 +3,7 @@ EazyHttp
 
 EazyHttp, easy, simple and fast HTTP requests for PHP, JavaScript, Python
 
-version **1.0.0** in progress
+version **1.0.0**
 
 **supports**
 
@@ -30,8 +30,9 @@ $http = new EazyHttp();
 
 // HTTP GET request
 $response = $http
-->option('timeout', 30/*secs*/) // default
-->option('methods', ['curl', 'file', 'socket']) // default order
+->option('timeout',             30/*secs*/) // default
+->option('follow_redirects',    3) // default
+->option('methods',             ['curl', 'file', 'socket']) // default order
 ->get(
     'https://example.com/',
     ['foo' => 'bar'], // custom URL params
@@ -41,8 +42,9 @@ $response = $http
 
 // HTTP POST request
 $response = $http
-->option('timeout', 30/*secs*/) // default
-->option('methods', ['curl', 'file', 'socket']) // default order
+->option('timeout',             30/*secs*/) // default
+->option('follow_redirects',    3) // default
+->option('methods',             ['curl', 'file', 'socket']) // default order
 ->post(
     'https://example.com/',
     ['foo' => 'bar'], // custom post data
@@ -59,9 +61,10 @@ const http = new EazyHttp();
 
 // HTTP GET request
 http
-.option('timeout', 30/*secs*/) // default
-.option('return_type', 'string') // default, 'string' or 'buffer'
-.option('methods', ['http', 'fetch', 'xhr']) // default order
+.option('timeout',              30/*secs*/) // default
+.option('follow_redirects',     3) // default
+.option('methods',              ['http', 'fetch', 'xhr']) // default order
+.option('return_type',          'string') // default, 'string' or 'buffer'
 .get(
     'https://example.com/',
     {'foo' : 'bar'}, // custom URL params
@@ -73,9 +76,10 @@ http
 
 // HTTP POST request
 http
-.option('timeout', 30/*secs*/) // default
-.option('return_type', 'string') // default, 'string' or 'buffer'
-.option('methods', ['http', 'fetch', 'xhr']) // default order
+.option('timeout',              30/*secs*/) // default
+.option('follow_redirects',     3) // default
+.option('methods',              ['http', 'fetch', 'xhr']) // default order
+.option('return_type',          'string') // default, 'string' or 'buffer'
 .post(
     {'foo' : 'bar'}, // custom post data
     {'User-Agent' : 'EazyHttp'}, // custom Headers
