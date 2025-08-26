@@ -5,6 +5,23 @@ include(dirname(__FILE__) . '/../../src/php/EazyHttp.php');
 
 function test()
 {
+    $response0c = (new EazyHttp())
+        ->option('return_type', 'string')
+        ->option('methods',     ['curl'])
+        ->get('http://localhost:9000/redirect.php')
+    ;
+    $response0f = (new EazyHttp())
+        ->option('return_type', 'string')
+        ->option('methods',     ['file'])
+        ->get('http://localhost:9000/redirect.php')
+    ;
+    $response0s = (new EazyHttp())
+        ->option('return_type', 'string')
+        ->option('methods',     ['socket'])
+        ->get('http://localhost:9000/redirect.php')
+    ;
+    file_put_contents(dirname(__FILE__).'/redirect.php.txt', implode("\n\n----\n\n", [$response0c->content,$response0f->content,$response0s->content]));
+
     $response1c = (new EazyHttp())
         ->option('return_type', 'string')
         ->option('methods',     ['curl'])
@@ -30,13 +47,13 @@ function test()
 
     $response3 = (new EazyHttp())
         ->option('return_type', 'string')
-        ->get('http://localhost:9000/test.php', ['foo' => 'bar'], [], [['name' => 'cookie', 'value' => 'value']])
+        ->get('http://localhost:9000/test.php', ['foo' => ['bar']], [], [['name' => 'cookie', 'value' => 'value']])
     ;
     file_put_contents(dirname(__FILE__).'/get-test.php.txt', json_encode($response3));
 
     $response4 = (new EazyHttp())
         ->option('return_type', 'string')
-        ->post('http://localhost:9000/test.php', ['foo' => 'bar'], [], [['name' => 'cookie', 'value' => 'value']])
+        ->post('http://localhost:9000/test.php', ['foo' => ['bar']], [], [['name' => 'cookie', 'value' => 'value']])
     ;
     file_put_contents(dirname(__FILE__).'/post-test.php.txt', json_encode($response4));
 }

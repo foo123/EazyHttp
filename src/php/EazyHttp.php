@@ -8,7 +8,7 @@ if (!class_exists('EazyHttp', false))
 {
 class EazyHttp
 {
-    const VERSION = '0.1.0';
+    const VERSION = '1.0.0';
 
     protected $opts = array();
 
@@ -116,11 +116,11 @@ class EazyHttp
         if (!empty($uri))
         {
             $method = strtoupper((string)$method);
-            if ('POST' !== $method) $method = 'GET';
+            if (!in_array($method, array('POST', 'PUT', 'PATCH'))) $method = 'GET';
 
             if ('client' === $type)
             {
-                if ('GET' === $method)
+                if (!('POST' === $method || 'PUT' === $method || 'PATCH' === $method))
                 {
                     $uri .= is_array($data) ? ((false === strpos($uri, '?') ? '?' : '&') . http_build_query($data, '', '&')) : '';
                     $data = '';
@@ -136,13 +136,13 @@ class EazyHttp
                 $hs = array_merge(array(), $headers); $headers = array();
                 foreach ($hs as $name => $value) $headers[ucwords(strtolower(trim($name)), '-')] = $value;
                 $headers = array_merge(array('User-Agent' => 'EazyHttp', 'Accept' => '*/*'), $headers);
-                if (('POST' === $method) && is_array($data))
+                if (('POST' === $method || 'PUT' === $method || 'PATCH' === $method) && is_array($data))
                 {
                     $headers['Content-Type'] = 'application/x-www-form-urlencoded';
                 }
                 $requestHeaders = $this->format_http_cookies($cookies, $this->format_http_header($headers, array()));
 
-                if ('POST' === $method)
+                if ('POST' === $method || 'PUT' === $method || 'PATCH' === $method)
                 {
                     $data = is_array($data) ? http_build_query($data, '', '&') : (is_string($data) ? $data : '');
                 }
@@ -223,14 +223,15 @@ class EazyHttp
         });
         curl_setopt($curl, CURLOPT_HTTPHEADER,      $requestHeaders);
 
-        if ('POST' === strtoupper($method))
+        if ('POST' === $method || 'PUT' === $method || 'PATCH' === $method)
         {
-            curl_setopt($curl, CURLOPT_POST, true);
-            curl_setopt($curl, CURLOPT_POSTFIELDS,  $requestBody);
+            if ('POST' === $method) curl_setopt($curl, CURLOPT_POST, true);
+            else curl_setopt($curl, CURLOPT_CUSTOMREQUEST, $method);
+            curl_setopt($curl, CURLOPT_POSTFIELDS, $requestBody);
         }
         else
         {
-            curl_setopt($curl, CURLOPT_HTTPGET,     true);
+            curl_setopt($curl, CURLOPT_HTTPGET, true);
         }
 
         // make request
@@ -268,7 +269,7 @@ class EazyHttp
         }
         $http = stream_context_create(array(
             'http' => array(
-                'method'            => 'POST' === strtoupper($method) ? 'POST' : 'GET',
+                'method'            => $method,
                 'header'            => $requestHeader,
                 'content'           => (string)$requestBody,
                 'follow_location'   => !empty($this->option('follow_location')),
@@ -344,7 +345,7 @@ class EazyHttp
             $request = ''; $response = '';
 
             // send request
-            $request .= ('POST' === strtoupper($method) ? 'POST' : 'GET')." $path HTTP/1.1";
+            $request .= "$method $path HTTP/1.1";
             $request .= "\r\n"."Host: $host";
             if (!empty($requestHeaders)) $request .= "\r\n".implode("\r\n", (array)$requestHeaders);
             $request .= "\r\n"."Content-Length: $contentLength";

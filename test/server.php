@@ -8,15 +8,22 @@ $__DIR__ = dirname(__FILE__);
 
 $uri = /*urldecode(*/parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH)/*)*/;
 
-if ($uri === '/index.php') $uri = '/';
-
-if ($uri !== '/' && file_exists($__DIR__ . '/' . $uri)) {
+if (file_exists($__DIR__ . '/' . $uri)) {
     if ('test.php' === substr($uri, -8))
     {
         include($__DIR__  . '/test.php');
+    }
+    elseif ('redirect.php' === substr($uri, -12))
+    {
+        include($__DIR__  . '/redirect.php');
     }
     else
     {
         return false; // existing file, serve as-is
     }
+}
+else
+{
+    http_response_code(404);
+    echo '404';
 }

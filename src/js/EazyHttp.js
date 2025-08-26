@@ -17,7 +17,7 @@ else if (!(name in root)) /* Browser/WebWorker/.. */
   /* module factory */        function(undef) {
 "use strict";
 
-var VERSION = '0.1.0',
+var VERSION = '1.0.0',
 
     PROTO = 'prototype',
     HAS = Object[PROTO].hasOwnProperty,
@@ -96,7 +96,7 @@ EazyHttp[PROTO] = {
             send_method, do_http = null, cb_called = false;
 
         method = String(method).toUpperCase();
-        if ('POST' !== method) method = 'GET';
+        if (!('POST' === method || 'PUT' === method || 'PATCH' === method)) method = 'GET';
 
         if (!headers || !is_obj(headers)) headers = {};
         if (!cookies || !is_array(cookies)) cookies = [];
@@ -110,14 +110,14 @@ EazyHttp[PROTO] = {
             }
         }
         headers = extend({'User-Agent': 'EazyHttp', 'Accept': '*/*'}, headers);
-        if ('POST' === method)
+        if ('POST' === method || 'PUT' === method || 'PATCH' === method)
         {
             data = format_data(method, data, headers);
         }
         else
         {
             uri += is_obj(data) ? ((-1 === uri.indexOf('?') ? '?' : '&') + http_build_query(data, '&')) : '';
-            data = '';
+            data = null;
         }
 
         methods = self.option('methods');
@@ -160,7 +160,7 @@ EazyHttp[PROTO] = {
         }
         if (!do_http && is_callable(cb))
         {
-            cb(new EazyHttpException('Request cannot be made'), {
+            cb(new EazyHttpException('No request made'), {
                 status  : 0,
                 content : false,
                 headers : {},
@@ -171,20 +171,16 @@ EazyHttp[PROTO] = {
     },
 
     _do_http_server: function(method, uri, data, headers, cookies, cb) {
-        var self = this, request, error, do_request,
+        var self = this, do_request,
             timeout = parseInt(self.option('timeout')),
             follow_location = !!self.option('follow_location'),
             max_redirects = parseInt(self.option('max_redirects')),
             return_type = String(self.option('return_type')).toLowerCase();
 
-        /*if ('GET' === method)
-        {
-            headers['Content-Type'] = 'text/plain';
-            headers['Content-Length'] = 0;
-        }*/
         headers = format_http_cookies(cookies, headers);
 
         do_request = function(uri, redirects) {
+            var request, error, opts, m, parts, protocol, host, port, path, query;
             if (redirects > max_redirects)
             {
                 cb(new EazyHttpException('Too many redirects'), {
@@ -195,7 +191,6 @@ EazyHttp[PROTO] = {
                 });
                 return;
             }
-            var m, parts, protocol, host, port, path, query;
             parts = parse_url(uri);
             host = parts['host'];
             if (!host || !host.length)
@@ -214,16 +209,18 @@ EazyHttp[PROTO] = {
             if (!path.length) path = '/';
             path += (null != parts['query']) && parts['query'].length ? ('?' + parts['query']) : '';
 
+            opts = {
+                'method'    : method,
+                'protocol'  : protocol + ':',
+                'host'      : host,
+                'port'      : port,
+                'path'      : path,
+                'headers'   : headers,
+                'timeout'   : 1000*timeout // ms
+            };
+
             try {
-                request = ('https' === protocol ? https : http).request({
-                    'method'    : method,
-                    'protocol'  : protocol + ':',
-                    'host'      : host,
-                    'port'      : port,
-                    'path'      : path,
-                    'headers'   : headers,
-                    'timeout'   : 1000*timeout // ms
-                });
+                request = ('https' === protocol ? https : http).request(opts);
             } catch (e) {
                 request = null;
                 error = e;
@@ -232,12 +229,12 @@ EazyHttp[PROTO] = {
             {
                 request.on('response', function(response) {
                     var status = +response.statusCode,
-                        chunks = [],
+                        body = [],
                         headers_ = parse_http_header(response.headers),
                         cookies_ = parse_http_cookies(headers_);
 
                     response.on('data', function(chunk) {
-                        chunks.push('buffer' === return_type ? Buffer.from(chunk) : chunk);
+                        body.push('buffer' === return_type ? Buffer.from(chunk) : chunk);
                     });
                     response.on('end', function() {
                         if (follow_location && (301 <= status && status <= 308) && (headers_['location']) && (m=headers_['location'][0].match(/^\s*(\S+)/i)) && (uri !== m[1]))
@@ -248,7 +245,7 @@ EazyHttp[PROTO] = {
                         {
                             cb(null, {
                                 status  : status,
-                                content : 'buffer' === return_type ? (Buffer.concat(chunks)) : (chunks.join('')),
+                                content : 'buffer' === return_type ? (Buffer.concat(body)) : (body.join('')),
                                 headers : headers_,
                                 cookies : cookies_
                             });
@@ -271,7 +268,7 @@ EazyHttp[PROTO] = {
                         cookies : []
                     });
                 });
-                if ('POST' === method) request.write(data);
+                if ('POST' === method || 'PUT' === method || 'PATCH' === method) request.write(data);
                 request.end();
             }
             else
@@ -288,53 +285,91 @@ EazyHttp[PROTO] = {
     },
 
     _do_http_fetch: function(method, uri, data, headers, cookies, cb) {
-        var self = this, request, error, status,
+        var self = this, do_request,
             timeout = parseInt(self.option('timeout')),
+            follow_location = !!self.option('follow_location'),
+            max_redirects = parseInt(self.option('max_redirects')),
             return_type = String(self.option('return_type')).toLowerCase();
-        try {
-            request = fetch(uri, {
-                'method'    : method,
-                'headers'   : format_http_cookies(cookies, headers),
-                'body'      : data,
-                'redirect'  : !!self.option('follow_location') ? 'follow' : 'manual',
-                'keepalive' : false
-            });
-        } catch (e) {
-            request = null;
-            error = e;
-        }
-        if (request)
-        {
-            request.then(function(response){
-                status = response.status;
-                headers = parse_http_header(response.headers);
-                cookies = parse_http_cookies(headers);
-                return 'buffer' === return_type ? response.arrayBuffer() : response.text();
-            }).then(function(content) {
-                cb(null, {
-                    status  : status,
-                    content : content,
-                    headers : headers,
-                    cookies : cookies
-                });
-            }).catch(function(error) {
-                cb(error, {
+
+        headers = format_http_cookies(cookies, headers);
+
+        do_request = function(uri, redirects) {
+            var request, error, opts;
+            if (redirects > max_redirects)
+            {
+                cb(new EazyHttpException('Too many redirects'), {
                     status  : 0,
                     content : false,
                     headers : {},
                     cookies : []
                 });
-            });
-        }
-        else
-        {
-            cb(error || new EazyHttpException('No fetch request'), {
-                status  : 0,
-                content : false,
-                headers : {},
-                cookies : []
-            });
-        }
+                return;
+            }
+            opts = {
+                'method'    : method,
+                'headers'   : headers,
+                'redirect'  : follow_location ? 'follow' : 'manual',
+                'keepalive' : false
+            };
+            if ('POST' === method || 'PUT' === method || 'PATCH' === method) opts['body'] = data;
+
+            try {
+                request = fetch(uri, opts);
+            } catch (e) {
+                request = null;
+                error = e;
+            }
+            if (request)
+            {
+                request.then(function(response){
+                    var m, status = response.status, body,
+                        headers_ = parse_http_header(response.headers),
+                        cookies_ = parse_http_cookies(headers_);
+
+                    /*if (follow_location && (301 <= status && status <= 308) && (headers_['location']) && (m=headers_['location'][0].match(/^\s*(\S+)/i)) && (uri !== m[1]))
+                    {
+                        // does not work, response.redirected is after the fact and inaccessible
+                        do_request(m[1], redirects+1);
+                    }
+                    else
+                    {*/
+                        body = 'buffer' === return_type ? response.arrayBuffer() : response.text();
+                        body.then(function(content) {
+                            cb(null, {
+                                status  : status,
+                                content : content,
+                                headers : headers_,
+                                cookies : cookies_
+                            });
+                        }).catch(function(error) {
+                            cb(error, {
+                                status  : 0,
+                                content : false,
+                                headers : {},
+                                cookies : []
+                            });
+                        });
+                    /*}*/
+                }).catch(function(error) {
+                    cb(error, {
+                        status  : 0,
+                        content : false,
+                        headers : {},
+                        cookies : []
+                    });
+                });
+            }
+            else
+            {
+                cb(error || new EazyHttpException('No fetch request'), {
+                    status  : 0,
+                    content : false,
+                    headers : {},
+                    cookies : []
+                });
+            }
+        };
+        do_request(uri, 0);
     },
 
     _do_http_xhr: function(method, uri, data, headers, cookies, cb) {
@@ -361,8 +396,8 @@ EazyHttp[PROTO] = {
                     cookies : []
                 });
             };
-            xhr.onerror = function(error) {
-                cb(error, {
+            xhr.onerror = function() {
+                cb(new EazyHttpException('Request error'), {
                     status  : 0,
                     content : false,
                     headers : {},
@@ -431,7 +466,7 @@ EazyHttp.Exception = EazyHttpException;
 // utils ---------------------------------
 function format_data(method, data, headers)
 {
-    if ('POST' === method)
+    if ('POST' === method || 'PUT' === method || 'PATCH' === method)
     {
         if (isNode)
         {
@@ -520,7 +555,7 @@ function format_data(method, data, headers)
     }
     else
     {
-        data = '';
+        data = null;
     }
     return data;
 }
