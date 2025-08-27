@@ -28,17 +28,20 @@ var VERSION = '1.0.0',
     isNode = ('undefined' !== typeof(global)) && ('[object Global]' === toString.call(global)),
 
     http = isNode ? require('http') : null,
-    https = isNode ? require('https') : null
+    https = isNode ? require('https') : null,
+
+    ID = 0
 ;
 
 function EazyHttp()
 {
-    this.opts = {};
+    var self = this;
+    self.opts = {};
     // some defaults
-    this.option('timeout',          30); // sec, default
-    this.option('follow_redirects', 3); // default
-    this.option('return_type',      'string'); // default
-    this.option('methods',          ['http', 'fetch', 'xhr']); // default
+    self.option('timeout',          30); // sec, default
+    self.option('follow_redirects', 3); // default
+    self.option('return_type',      'string'); // default
+    self.option('methods',          ['http', 'fetch', 'xhr', 'iframe']); // default
 }
 EazyHttp[PROTO] = {
     constructor: EazyHttp,
@@ -131,19 +134,47 @@ EazyHttp[PROTO] = {
             for (i=0,n=methods.length; i<n; ++i)
             {
                 send_method = String(methods[i]).toLowerCase();
-                if (('http' === send_method) && isNode && (https && http))
+                if (
+                    ('http' === send_method)
+                    && isNode
+                    && (https && http)
+                )
                 {
                     do_http = '_do_http_server';
                     break;
                 }
-                else if (('fetch' === send_method) && !isNode && ('undefined' !== typeof(fetch)))
+                else if (
+                    ('fetch' === send_method)
+                    && !isNode
+                    && ('undefined' !== typeof(fetch))
+                )
                 {
                     do_http = '_do_http_fetch';
                     break;
                 }
-                else if (('xhr' === send_method) && !isNode)
+                else if (
+                    ('xhr' === send_method)
+                    && !isNode
+                    && (
+                        ('undefined' !== typeof(XMLHttpRequest))
+                        || ('undefined' !== typeof(ActiveXObject))
+                    )
+                )
                 {
                     do_http = '_do_http_xhr';
+                    break;
+                }
+                else if (
+                    ('iframe' === send_method)
+                    && !isNode
+                    && (
+                        ('undefined' !== typeof(document))
+                        && (document.body)
+                        && ('function' === typeof(document.createElement))
+                    )
+                )
+                {
+                    do_http = '_do_http_iframe';
                     break;
                 }
             }
@@ -178,15 +209,16 @@ EazyHttp[PROTO] = {
     _do_http_server: function(method, uri, data, headers, cookies, cb) {
         var self = this, do_request,
             timeout = parseInt(self.option('timeout')),
-            follow_redirects = parseInt(self.option('follow_redirects')),
+            follow_redirects = +(self.option('follow_redirects')),
             return_type = String(self.option('return_type')).toLowerCase();
 
         headers = format_http_cookies(cookies, headers);
 
-        do_request = function(uri, redirects) {
+        do_request = function(uri, redirect) {
             var request = null, error = null, opts,
-                parts, protocol, host, port, path, query;
-            if (redirects > follow_redirects)
+                parts, protocol, host, port, path, query,
+                abort_on_redirect = null;
+            if (redirect > follow_redirects)
             {
                 cb(new EazyHttpException('Too many redirects'), {
                     status  : 0,
@@ -223,6 +255,11 @@ EazyHttp[PROTO] = {
                 'headers'   : headers,
                 'timeout'   : 1000*timeout // ms
             };
+            /*if ('undefined' !== typeof(AbortController))
+            {
+                abort_on_redirect = new AbortController();
+                opts['signal'] = abort_on_redirect.signal;
+            }*/
 
             try {
                 request = ('https' === protocol ? https : http).request(opts);
@@ -233,28 +270,32 @@ EazyHttp[PROTO] = {
             if (request)
             {
                 request.on('response', function(response) {
-                    var m, status = +response.statusCode, body = [],
-                        headers_ = parse_http_header(response.headers),
-                        cookies_ = parse_http_cookies(headers_);
+                    var m, status = +response.statusCode, body,
+                        received_headers = parse_http_header(response.headers),
+                        received_cookies = parse_http_cookies(received_headers);
 
-                    response.on('data', function(chunk) {
-                        body.push('buffer' === return_type ? Buffer.from(chunk) : chunk);
-                    });
-                    response.on('end', function() {
-                        if ((0 < follow_redirects) && (301 <= status && status <= 308) && (headers_['location']) && (m=headers_['location'][0].match(/^\s*(\S+)/i)) && (uri !== m[1]))
-                        {
-                            do_request(m[1], redirects+1);
-                        }
-                        else
-                        {
+                    if ((0 < follow_redirects) && (301 <= status && status <= 308) && (received_headers['location']) && (m=received_headers['location'][0].match(/^\s*(\S+)/i)) && (uri !== m[1]))
+                    {
+                        //abort_on_redirect.abort(new EazyHttpException('redirected'));
+                        request.abort();
+                        request.destroy();
+                        do_request(m[1], redirect+1);
+                    }
+                    else
+                    {
+                        body = [];
+                        response.on('data', function(chunk) {
+                            body.push('buffer' === return_type ? Buffer.from(chunk) : chunk);
+                        });
+                        response.on('end', function() {
                             cb(null, {
                                 status  : status,
                                 content : 'buffer' === return_type ? (Buffer.concat(body)) : (body.join('')),
-                                headers : headers_,
-                                cookies : cookies_
+                                headers : received_headers,
+                                cookies : received_cookies
                             });
-                        }
-                    });
+                        });
+                    }
                 });
                 request.on('timeout', function() {
                     cb(new EazyHttpException('Request timeout after '+timeout+' secs'), {
@@ -265,6 +306,7 @@ EazyHttp[PROTO] = {
                     });
                 });
                 request.on('error', function(error) {
+                    //if ('redirected' === error.message) return;
                     cb(error, {
                         status  : 0,
                         content : false,
@@ -291,16 +333,15 @@ EazyHttp[PROTO] = {
     _do_http_fetch: function(method, uri, data, headers, cookies, cb) {
         var self = this, do_request,
             timeout = parseInt(self.option('timeout')),
-            follow_redirects = parseInt(self.option('follow_redirects')),
+            follow_redirects = +(self.option('follow_redirects')),
             return_type = String(self.option('return_type')).toLowerCase();
 
         headers = format_http_cookies(cookies, headers);
 
-        do_request = function(uri, redirects) {
-            var request = null, error = null, fetched = false,
-                on_timeout = null, abort_on_timeout = null,
-                opts;
-            if (redirects > follow_redirects)
+        do_request = function(uri, redirect) {
+            var request = null, error = null, done = false,
+                on_timeout = null, abort_on_timeout = null, opts;
+            if (redirect > follow_redirects)
             {
                 cb(new EazyHttpException('Too many redirects'), {
                     status  : 0,
@@ -321,7 +362,6 @@ EazyHttp[PROTO] = {
             {
                 abort_on_timeout = new AbortController();
                 opts['signal'] = abort_on_timeout.signal;
-                on_timeout = setTimeout(function() {if (!fetched) abort_on_timeout.abort();}, 1000*timeout); // ms
             }
 
             try {
@@ -332,19 +372,25 @@ EazyHttp[PROTO] = {
             }
             if (request)
             {
+                on_timeout = setTimeout(function() {
+                    if (!done)
+                    {
+                        abort_on_timeout.abort();
+                    }
+                }, 1000*timeout); // ms
                 request.then(function(response) {
                     var m, status = +response.status, body,
-                        headers_ = parse_http_header(response.headers),
-                        cookies_ = parse_http_cookies(headers_);
+                        received_headers = parse_http_header(response.headers),
+                        received_cookies = parse_http_cookies(received_headers);
 
-                    fetched = true;
+                    done = true;
                     if (on_timeout) clearTimeout(on_timeout);
                     on_timeout = null;
 
-                    /*if ((0 < follow_redirects) && (301 <= status && status <= 308) && (headers_['location']) && (m=headers_['location'][0].match(/^\s*(\S+)/i)) && (uri !== m[1]))
+                    /*if ((0 < follow_redirects) && (301 <= status && status <= 308) && (received_headers['location']) && (m=received_headers['location'][0].match(/^\s*(\S+)/i)) && (uri !== m[1]))
                     {
                         // does not work, response.redirected is after the fact and inaccessible
-                        do_request(m[1], redirects+1);
+                        do_request(m[1], redirect+1);
                     }
                     else
                     {*/
@@ -353,8 +399,8 @@ EazyHttp[PROTO] = {
                             cb(null, {
                                 status  : status,
                                 content : content,
-                                headers : headers_,
-                                cookies : cookies_
+                                headers : received_headers,
+                                cookies : received_cookies
                             });
                         }).catch(function(error) {
                             cb(error, {
@@ -366,7 +412,7 @@ EazyHttp[PROTO] = {
                         });
                     /*}*/
                 }).catch(function(error) {
-                    fetched = true;
+                    done = true;
                     if (on_timeout) clearTimeout(on_timeout);
                     on_timeout = null;
 
@@ -394,7 +440,7 @@ EazyHttp[PROTO] = {
     _do_http_xhr: function(method, uri, data, headers, cookies, cb) {
         var self = this, xhr = null, error = null,
             timeout = parseInt(self.option('timeout')),
-            follow_redirects = parseInt(self.option('follow_redirects')),
+            follow_redirects = +(self.option('follow_redirects')),
             return_type = String(self.option('return_type')).toLowerCase();
         try {
             xhr = 'undefined' !== typeof(XMLHttpRequest) ? (new XMLHttpRequest()) : (new ActiveXObject('Microsoft.XMLHTTP'));
@@ -428,14 +474,14 @@ EazyHttp[PROTO] = {
                 if (4/*DONE*/ === xhr.readyState)
                 {
                     var status = +xhr.status,
-                        body = 'buffer' === return_type ? (new Uint8Array(xhr.response)) : xhr.responseText,
-                        headers_ = parse_http_header(xhr.getAllResponseHeaders()),
-                        cookies_ = parse_http_cookies(headers_);
+                        content = 'buffer' === return_type ? (new Uint8Array(xhr.response)) : xhr.responseText,
+                        received_headers = parse_http_header(xhr.getAllResponseHeaders()),
+                        received_cookies = parse_http_cookies(received_headers);
                     cb(null, {
                         status  : status,
-                        content : body,
-                        headers : headers_,
-                        cookies : cookies_
+                        content : content,
+                        headers : received_headers,
+                        cookies : received_cookies
                     });
                 }
                 else
@@ -468,6 +514,156 @@ EazyHttp[PROTO] = {
         else
         {
             cb(error || new EazyHttpException('No XMLHttpRequest request'), {
+                status  : 0,
+                content : false,
+                headers : {},
+                cookies : []
+            });
+        }
+    },
+
+    _do_http_iframe: function(method, uri, data, headers, cookies, cb) {
+        var self = this, form = null, iframe = null, error = null,
+            timeout = parseInt(self.option('timeout')),
+            follow_redirects = +(self.option('follow_redirects')),
+            return_type = String(self.option('return_type')).toLowerCase(),
+            on_timeout = null, finish = null, done = false;
+        try {
+            form = document.createElement('form');
+            iframe = document.createElement('iframe');
+        } catch (e) {
+            form = null;
+            iframe = null;
+            error = e;
+        }
+        if (form && iframe)
+        {
+            finish = function() {
+                if (iframe)
+                {
+                    iframe.onload = iframe.onerror = null;
+                    iframe.remove();
+                    iframe = null;
+                }
+                if (form)
+                {
+                    form.remove();
+                    form = null;
+                }
+            };
+            on_timeout = setTimeout(function() {
+                if (!done)
+                {
+                    finish();
+                    cb(new EazyHttpException('Request timeout after '+timeout+' secs'), {
+                        status  : 0,
+                        content : false,
+                        headers : {},
+                        cookies : []
+                    });
+                }
+            }, 1000*timeout); // ms
+
+            iframe.onerror = function() {
+                done = true;
+                if (on_timeout) clearTimeout(on_timeout);
+                on_timeout = null;
+
+                cb(new EazyHttpException('Request error'), {
+                    status  : 0,
+                    content : false,
+                    headers : {},
+                    cookies : []
+                });
+            };
+            iframe.onload = function() {
+                done = true;
+                if (on_timeout) clearTimeout(on_timeout);
+                on_timeout = null;
+
+                var doc = iframe.contentDocument || iframe.contentWindow.document,
+                    content = (doc && doc.body ? doc.body.innerHTML : '') || '',
+                    received_headers = doc && doc.contentType ? {'content-type': [doc.contentType + (doc.characterSet ? '; charset=' + doc.characterSet : '')]} : {},
+                    received_cookies = doc && doc.cookie && doc.cookie.length ? doc.cookie.split(';').map(function(cookie) {return parse_cookie(cookie, false, true);}) : [];
+
+                finish();
+
+                cb(null, {
+                    status  : 200,
+                    content : content,
+                    headers : received_headers,
+                    cookies : received_cookies
+                });
+            };
+            ++ID;
+            iframe.id = '_eazy_http_iframe_'+String(ID);
+            iframe.name = iframe.id;
+            iframe.style.height = '0px';
+            iframe.style.width = '0px';
+            iframe.style.overflow = 'hidden';
+            form.id = '_eazy_http_form_'+String(ID);
+            form.action = uri;
+            form.method = method;
+            form.enctype = HAS.call(headers, 'Content-Type') ? headers['Content-Type'] : 'application/x-www-form-urlencoded';
+            form.target = iframe.id;
+            if (is_string(data))
+            {
+                data = parse_str(data);
+            }
+            if (is_obj(data))
+            {
+                data = flatten(data, {});
+                array_keys(data).forEach(function(key) {
+                    var input, value = data[key];
+                    if (("undefined" !== typeof(File)) && (value instanceof File))
+                    {
+                        // File
+                        if ("undefined" !== typeof(DataTransfer))
+                        {
+                            var dt = new DataTransfer();
+                            dt.items.add(value);
+                            input = document.createElement('input');
+                            input.type = 'file';
+                            input.name = key;
+                            input.files = dt.files;
+                        }
+                        else
+                        {
+                            // bypass
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = key;
+                        input.value = String(value);
+                    }
+                    form.appendChild(input);
+                });
+            }
+            document.body.appendChild(form);
+            document.body.appendChild(iframe);
+            try {
+                form.submit();
+            } catch (e) {
+                error = e;
+            }
+            if (error)
+            {
+                finish();
+                cb(error || new EazyHttpException('Form submit failed'), {
+                    status  : 0,
+                    content : false,
+                    headers : {},
+                    cookies : []
+                });
+            }
+        }
+        else
+        {
+            cb(error || new EazyHttpException('No iframe request'), {
                 status  : 0,
                 content : false,
                 headers : {},
@@ -663,19 +859,10 @@ function format_http_cookies(cookies, headers)
     }
     return headers;
 }
-function parse_cookie(str, isRaw)
+function parse_cookie(str, isRaw, nameValueOnly)
 {
     var cookie, parts, part, i, n, name, value, data;
-    cookie = {
-        'isRaw' : isRaw,
-        'expires' : 0,
-        'path' : '/',
-        'domain' : null,
-        'secure' : false,
-        'httponly' : false,
-        'samesite' : null,
-        'partitioned' : false
-    };
+    cookie = {};
 
     parts = String(str).split(';');
     for (i=0,n=parts.length; i<n; ++i) parts[i] = parts[i].split('=', 2);
@@ -685,8 +872,18 @@ function parse_cookie(str, isRaw)
     value = (null != part[1]) ? (!isRaw ? urldecode(trim(part[1])) : trim(part[1])) : null;
     cookie['name'] = name;
     cookie['value'] = value;
+    if (nameValueOnly) return cookie;
 
-    data = {};
+    data = {
+        'isRaw' : isRaw,
+        'expires' : 0,
+        'path' : '/',
+        'domain' : null,
+        'secure' : false,
+        'httponly' : false,
+        'samesite' : null,
+        'partitioned' : false
+    };
     for (i=0,n=parts.length; i<n; ++i)
     {
         part = parts[i];

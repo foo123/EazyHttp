@@ -13,6 +13,7 @@ function test()
     }
     function write(file, content)
     {
+        // promisify
         return new Promise(function(resolve, reject) {
             fs.writeFile(file, content, err => {
                 if (err) reject(err);
@@ -21,8 +22,12 @@ function test()
         });
     }
 
-    return request('GET', 'http://localhost:9000/redirect.php').then(
+    return request('GET', 'http://localhost:9000/redirect.php?max_redirects=2').then(
         (response) => write(__dirname+'/redirect.php.txt', response.content)
+    ).then(
+        () => request('GET', 'http://localhost:9000/redirect.php?max_redirects=10')
+    ).then(
+        (response) => write(__dirname+'/max-redirect.php.txt', JSON.stringify(response))
     ).then(
         () => request('GET', 'http://localhost:9000/test.txt')
      ).then(
@@ -39,11 +44,9 @@ function test()
         () => request('POST', 'http://localhost:9000/test.php', {'foo' : ['bar']}, {}, [{'name' : 'cookie', 'value' : 'value'}])
     ).then(
         (response) => write(__dirname+'/post-test.php.txt', JSON.stringify(response))
-    ).catch(
-        (error) => console.error(error)
     );
 }
 
-test().then(() => process.exit());
+test().then(() => 1).catch((error) => console.error(error));
 
 

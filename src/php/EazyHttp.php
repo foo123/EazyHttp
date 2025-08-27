@@ -314,8 +314,8 @@ class EazyHttp
         set_time_limit(0);
         $timeout = intval($this->option('timeout')); // sec
         $follow_redirects = intval($this->option('follow_redirects'));
-        $redirects = 0;
-        while ($redirects <= $follow_redirects)
+        $redirect = 0;
+        while ($redirect <= $follow_redirects)
         {
             $parts = parse_url($uri);
             if (!isset($parts['host']))
@@ -397,7 +397,7 @@ class EazyHttp
             }
             if ((0 < $follow_redirects) && (301 <= $responseStatus && $responseStatus <= 308) && preg_match('#Location:\\s*(\\S+)#i', $responseHeader, $m) && ($uri !== $m[1]))
             {
-                ++$redirects;
+                ++$redirect;
                 $uri = $m[1];
                 continue;
             }

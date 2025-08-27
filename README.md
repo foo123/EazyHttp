@@ -16,7 +16,8 @@ version **1.0.0**
 **JavaScript/Browser (in any desired order)**
 
 * `fetch` (if available)
-* `xmlhttprequest` (if available)
+* `XMLHttpRequest` (if available)
+* `iframe` (if available)
 
 **JavaScript/Node**
 
@@ -29,11 +30,13 @@ version **1.0.0**
 $http = new EazyHttp();
 
 // HTTP GET request
-$response = $http
-->option('timeout',             30/*secs*/) // default
-->option('follow_redirects',    3) // default
-->option('methods',             ['curl', 'file', 'socket']) // default order
-->get(
+$response = $http->option(
+    'timeout',             30/*secs*/ // default
+)->option(
+    'follow_redirects',    3 // default
+)->option(
+    'methods',             ['curl', 'file', 'socket'] // default order
+)->get(
     'https://example.com/',
     ['foo' => 'bar'], // custom URL params
     ['User-Agent' => 'EazyHttp'], // custom Headers
@@ -41,11 +44,13 @@ $response = $http
 );
 
 // HTTP POST request
-$response = $http
-->option('timeout',             30/*secs*/) // default
-->option('follow_redirects',    3) // default
-->option('methods',             ['curl', 'file', 'socket']) // default order
-->post(
+$response = $http->option(
+    'timeout',             30/*secs*/ // default
+)->option(
+    'follow_redirects',    3 // default
+)->option(
+    'methods',             ['curl', 'file', 'socket'] // default order
+)->post(
     'https://example.com/',
     ['foo' => 'bar'], // custom post data
     ['User-Agent' => 'EazyHttp'], // custom Headers
@@ -60,12 +65,15 @@ echo json_encode($response); // stdClass: {status}, {content}, {headers}, {cooki
 const http = new EazyHttp();
 
 // HTTP GET request
-http
-.option('timeout',              30/*secs*/) // default
-.option('follow_redirects',     3) // default
-.option('methods',              ['http', 'fetch', 'xhr']) // default order
-.option('return_type',          'string') // default, 'string' or 'buffer'
-.get(
+http.option(
+    'timeout',              30/*secs*/ // default
+).option(
+    'follow_redirects',     3 // default
+).option(
+    'methods',              ['http', 'fetch', 'xhr', 'iframe'] // default order
+).option(
+    'return_type',          'string' // default, 'string' or 'buffer'
+).get(
     'https://example.com/',
     {'foo' : 'bar'}, // custom URL params
     {'User-Agent' : 'EazyHttp'}, // custom Headers
@@ -75,12 +83,15 @@ http
 );
 
 // HTTP POST request
-http
-.option('timeout',              30/*secs*/) // default
-.option('follow_redirects',     3) // default
-.option('methods',              ['http', 'fetch', 'xhr']) // default order
-.option('return_type',          'string') // default, 'string' or 'buffer'
-.post(
+http.option(
+    'timeout',              30/*secs*/ // default
+).option(
+    'follow_redirects',     3 // default
+).option(
+    'methods',              ['http', 'fetch', 'xhr', 'iframe'] // default order
+).option(
+    'return_type',          'string' // default, 'string' or 'buffer'
+).post(
     'https://example.com/',
     {'foo' : 'bar'}, // custom post data
     {'User-Agent' : 'EazyHttp'}, // custom Headers

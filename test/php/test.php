@@ -8,19 +8,36 @@ function test()
     $response0c = (new EazyHttp())
         ->option('return_type', 'string')
         ->option('methods',     ['curl'])
-        ->get('http://localhost:9000/redirect.php')
+        ->get('http://localhost:9000/redirect.php?max_redirects=2')
     ;
     $response0f = (new EazyHttp())
         ->option('return_type', 'string')
         ->option('methods',     ['file'])
-        ->get('http://localhost:9000/redirect.php')
+        ->get('http://localhost:9000/redirect.php?max_redirects=2')
     ;
     $response0s = (new EazyHttp())
         ->option('return_type', 'string')
         ->option('methods',     ['socket'])
-        ->get('http://localhost:9000/redirect.php')
+        ->get('http://localhost:9000/redirect.php?max_redirects=2')
     ;
     file_put_contents(dirname(__FILE__).'/redirect.php.txt', implode("\n\n----\n\n", [$response0c->content,$response0f->content,$response0s->content]));
+
+    $response0cm = (new EazyHttp())
+        ->option('return_type', 'string')
+        ->option('methods',     ['curl'])
+        ->get('http://localhost:9000/redirect.php?max_redirects=10')
+    ;
+    $response0fm = (new EazyHttp())
+        ->option('return_type', 'string')
+        ->option('methods',     ['file'])
+        ->get('http://localhost:9000/redirect.php?max_redirects=10')
+    ;
+    $response0sm = (new EazyHttp())
+        ->option('return_type', 'string')
+        ->option('methods',     ['socket'])
+        ->get('http://localhost:9000/redirect.php?max_redirects=10')
+    ;
+    file_put_contents(dirname(__FILE__).'/max-redirect.php.txt', json_encode([$response0cm,$response0fm,$response0sm]));
 
     $response1c = (new EazyHttp())
         ->option('return_type', 'string')
