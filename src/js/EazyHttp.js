@@ -212,9 +212,9 @@ EazyHttp[PROTO] = {
 
         headers = format_http_cookies(cookies, headers);
 
-        do_request = function(uri, redirect) {
+        do_request = function(uri, redirect, protocol0, host0, port0, path0) {
             var request = null, error = null, opts,
-                parts, protocol, host, port, path, query;
+                parts, protocol, host, port, path;
             if (redirect > follow_redirects)
             {
                 cb(new EazyHttpException('Exceeded maximum redirects of ' + follow_redirects), {
@@ -226,16 +226,12 @@ EazyHttp[PROTO] = {
                 return;
             }
 
-            if (0 < redirect)
-            {
-                method = 'GET';
-                headers = {};
-                cookies = [];
-                data = null;
-            }
-
             parts = parse_url(uri);
             host = parts['host'];
+            if (!host || !host.length)
+            {
+                host = host0;
+            }
             if (!host || !host.length)
             {
                 cb(new EazyHttpException('No host'), {
@@ -246,11 +242,32 @@ EazyHttp[PROTO] = {
                 });
                 return;
             }
-            protocol = (null != parts['scheme']) ? parts['scheme'].toLowerCase() : 'http';
-            port = (null != parts['port']) ? +parts['port'] : ('https' === protocol ? 443 : 80);
+            protocol = (null != parts['scheme']) ? parts['scheme'].toLowerCase() : (protocol0 || 'http');
+            port = (null != parts['port']) ? +parts['port'] : (port0 || ('https' === protocol ? 443 : 80));
             path = (null != parts['path']) ? parts['path'] : '/';
             if (!path.length) path = '/';
+            path = path_join(path, path0);
+            path0 = path;
             path += (null != parts['query']) && parts['query'].length ? ('?' + parts['query']) : '';
+
+            if (0 < redirect)
+            {
+                method = 'GET';
+                data = null;
+                //cookies = [];
+
+                if (headers['Content-Type']) delete headers['Content-Type'];
+                if (headers['Content-Encoding']) delete headers['Content-Encoding'];
+                if (headers['Content-Length']) delete headers['Content-Length'];
+
+                if (!is_same_origin(host, host0, port, port0, protocol, protocol0))
+                {
+                    if (headers['Cookie']) delete headers['Cookie'];
+                    if (headers['Authorization']) delete headers['Authorization'];
+                    if (headers['Proxy-Authorization']) delete headers['Proxy-Authorization'];
+                }
+                if (headers['Referer']) delete headers['Referer'];
+            }
 
             opts = {
                 'method'    : method,
@@ -275,11 +292,11 @@ EazyHttp[PROTO] = {
                         received_headers = parse_http_header(response.headers),
                         received_cookies = parse_http_cookies(received_headers);
 
-                    if ((0 < follow_redirects) && (301 <= status && status <= 308) && (received_headers['location']) && (m=received_headers['location'][0].match(/^\s*(\S+)/i)) && (uri !== m[1]))
+                    if ((0 < follow_redirects) && (301 <= status && status <= 308) && (received_headers['location']) && (m=received_headers['location'].match(/^\s*(\S+)/i))/* && (uri !== m[1])*/)
                     {
                         request.abort();
                         request.destroy();
-                        do_request(m[1], redirect+1);
+                        do_request(m[1], redirect+1, protocol, host, port, path0);
                     }
                     else
                     {
@@ -337,9 +354,10 @@ EazyHttp[PROTO] = {
 
         headers = format_http_cookies(cookies, headers);
 
-        do_request = function(uri, redirect) {
+        do_request = function(uri, redirect, protocol0, host0, port0) {
             var request = null, error = null, done = false,
-                on_timeout = null, abort_on_timeout = null, opts;
+                on_timeout = null, abort_on_timeout = null,
+                parts, protocol, host, port, opts;
             if (redirect > follow_redirects)
             {
                 cb(new EazyHttpException('Exceeded maximum redirects of ' + follow_redirects), {
@@ -350,6 +368,31 @@ EazyHttp[PROTO] = {
                 });
                 return;
             }
+            parts = parse_url(uri);
+            host = parts['host'];
+            if (!host || !host.length) host = host0;
+            protocol = (null != parts['scheme']) ? parts['scheme'].toLowerCase() : (protocol0 || 'http');
+            port = (null != parts['port']) ? +parts['port'] : (port0 || ('https' === protocol ? 443 : 80));
+
+            if (0 < redirect)
+            {
+                method = 'GET';
+                data = null;
+                //cookies = [];
+
+                if (headers['Content-Type']) delete headers['Content-Type'];
+                if (headers['Content-Encoding']) delete headers['Content-Encoding'];
+                if (headers['Content-Length']) delete headers['Content-Length'];
+
+                if (!is_same_origin(host, host0, port, port0, protocol, protocol0))
+                {
+                    if (headers['Cookie']) delete headers['Cookie'];
+                    if (headers['Authorization']) delete headers['Authorization'];
+                    if (headers['Proxy-Authorization']) delete headers['Proxy-Authorization'];
+                }
+                if (headers['Referer']) delete headers['Referer'];
+            }
+
             opts = {
                 'method'    : method,
                 'headers'   : headers,
@@ -378,7 +421,7 @@ EazyHttp[PROTO] = {
                     }
                 }, 1000*timeout); // ms
                 request.then(function(response) {
-                    var m, status = +response.status, body,
+                    var m, p, status = +response.status, body,
                         received_headers = parse_http_header(response.headers),
                         received_cookies = parse_http_cookies(received_headers);
 
@@ -386,10 +429,11 @@ EazyHttp[PROTO] = {
                     if (on_timeout) clearTimeout(on_timeout);
                     on_timeout = null;
 
-                    /*if ((0 < follow_redirects) && (301 <= status && status <= 308) && (received_headers['location']) && (m=received_headers['location'][0].match(/^\s*(\S+)/i)) && (uri !== m[1]))
+                    /*if ((0 < follow_redirects) && ((0 === status) || (301 <= status && status <= 308)) && response.url/* && (received_headers['location']) && (m=received_headers['location'].match(/^\s*(\S+)/i)) && (uri !== m[1])* /)
                     {
-                        // does not work, response.redirected is after the fact and inaccessible
-                        do_request(m[1], redirect+1);
+                        // does not work
+                        p = parse_url(request.url);
+                        do_request(/*m[1]* /response.url, redirect+1, p['scheme'], p['host'], p['port']);
                     }
                     else
                     {*/
@@ -554,7 +598,7 @@ EazyHttp[PROTO] = {
                 if (!done)
                 {
                     finish();
-                    cb(new EazyHttpException('Request timeout after '+timeout+' secs'), {
+                    cb(new EazyHttpException('Request timeout after ' + timeout + ' seconds'), {
                         status  : 0,
                         content : false,
                         headers : {},
@@ -582,7 +626,7 @@ EazyHttp[PROTO] = {
 
                 var doc = iframe.contentDocument || iframe.contentWindow.document,
                     content = (doc && doc.body ? doc.body.innerHTML : '') || '',
-                    received_headers = doc && doc.contentType ? {'content-type': [doc.contentType + (doc.characterSet ? '; charset=' + doc.characterSet : '')]} : {},
+                    received_headers = doc ? {'content-type': doc.contentType + '; charset=' + doc.characterSet, 'last-modified': (new Date(doc.lastModified)).toUTCString()} : {},
                     received_cookies = doc && doc.cookie && doc.cookie.length ? doc.cookie.split(';').map(function(cookie) {return parse_cookie(cookie, false, true);}) : [];
 
                 finish();
@@ -683,6 +727,63 @@ EazyHttpException[PROTO].constructor = EazyHttpException;
 EazyHttp.Exception = EazyHttpException;
 
 // utils ---------------------------------
+function is_same_origin(host, host2, port, port2, protocol, protocol2)
+{
+    if ((port !== port2) || (protocol !== protocol2)) return false;
+    host = host.toLowerCase(); host2 = host2.toLowerCase();
+    if (host === host2) return true; // same host
+    //if (('.' + host) === host2.slice(-host.length-1)) return true; // host2 is subdomain of host
+    if (('.' + host2) === host.slice(-host2.length-1)) return true; // host is subdomain of host2
+    return false;
+}
+function path_join(path, basepath)
+{
+    if (('/' === path.slice(0, 1)) || !basepath) return path; // absolute
+
+    var p = path, b = basepath, absolute = 0, parts, base;
+
+    if ('/' === b.slice(0, 1))
+    {
+        absolute = 1;
+        b = b.slice(1);
+    }
+    if ('/' === b.slice(-1))
+    {
+        b = b.slice(0, -1);
+    }
+    if ('/' === p.slice(0, 1))
+    {
+        p = p.slice(1);
+    }
+    if ('/' === p.slice(-1))
+    {
+        p = p.slice(0, -1);
+    }
+    if (!p.length || !b.length) return (absolute ? '/' : '' ) + path;
+
+    parts = p.split('/');
+    base = b.split('/');
+
+    while (parts.length)
+    {
+        if (!base.length) return path;
+        if ('.' === parts[0])
+        {
+            parts.shift(); // same dir
+        }
+        else if ('..' === parts[0])
+        {
+            parts.shift();
+            base.pop(); // dir up
+        }
+        else
+        {
+            if (parts[0] === base[base.length-1]) base.pop(); // remove duplicate
+            break; // done
+        }
+    }
+    return (absolute ? '/' : '') + base.join('/') + '/' + parts.join('/');
+}
 function format_data(method, do_http, data, headers)
 {
     if ('POST' === method || 'PUT' === method || 'PATCH' === method)
@@ -783,8 +884,15 @@ function parse_http_header(responseHeader)
     {
         responseHeader.forEach(function(value, name) {
             name = /*ucwords(*/trim(name).toLowerCase()/*, '-')*/;
-            if (HAS.call(responseHeaders, name)) responseHeaders[name].push(trim(value));
-            else responseHeaders[name] = [trim(value)];
+            if ('set-cookie' === name)
+            {
+                if (HAS.call(responseHeaders, name)) responseHeaders[name].push(trim(value));
+                else responseHeaders[name] = [trim(value)];
+            }
+            else
+            {
+                responseHeaders[name] = trim(value);
+            }
         });
     }
     else if (is_obj(responseHeader))
@@ -795,8 +903,15 @@ function parse_http_header(responseHeader)
             {
                 name = /*ucwords(*/trim(name).toLowerCase()/*, '-')*/;
                 value = responseHeader[name];
-                if (HAS.call(responseHeaders, name)) responseHeaders[name].push(trim(value));
-                else responseHeaders[name] = [trim(value)];
+                if ('set-cookie' === name)
+                {
+                    if (HAS.call(responseHeaders, name)) responseHeaders[name].push(trim(value));
+                    else responseHeaders[name] = [trim(value)];
+                }
+                else
+                {
+                    responseHeaders[name] = trim(value);
+                }
             }
         }
     }
@@ -815,8 +930,15 @@ function parse_http_header(responseHeader)
                     {
                         name = /*ucwords(*/trim(parts[0]).toLowerCase()/*, '-')*/;
                         value = parts[1];
-                        if (HAS.call(responseHeaders, name)) responseHeaders[name].push(trim(value));
-                        else responseHeaders[name] = [trim(value)];
+                        if ('set-cookie' === name)
+                        {
+                            if (HAS.call(responseHeaders, name)) responseHeaders[name].push(trim(value));
+                            else responseHeaders[name] = [trim(value)];
+                        }
+                        else
+                        {
+                            responseHeaders[name] = trim(value);
+                        }
                     }
                 }
             }

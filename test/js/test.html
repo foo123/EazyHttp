@@ -2,32 +2,53 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-<title>Test</title>
+<title>Test EazyHttp Client</title>
 </head>
 <body>
-<h1>Test</h1>
+
+<h1>Test EazyHttp Client</h1>
 <h2>Open console</h2>
+
 <form id="form" action="/test.php" method="post" enctype="application/x-www-form-urlencoded" onsubmit="return test(this);">
-  <fieldset>
-    <p>foo: <input type="text" name="foo[0]" value="bar" /></p>
-    <p><input type="submit" value="Submit" /> </p>
-  </fieldset>
+    <fieldset>
+        <p>foo: <input type="text" name="foo[0]" value="bar" /></p>
+        <button type="submit">Test Submit</button>
+        &nbsp;&nbsp;
+        <button onclick="return test_redirect();">Test Redirect</button>
+        &nbsp;&nbsp;
+        <button onclick="return test_timeout();">Test Timeout</button>
+    </fieldset>
 </form>
+
 <script type="text/javascript" src="./EazyHttp.js"></script>
-<script>
+<script type="text/javascript">
 function test(form)
 {
-    (new EazyHttp()).option('methods', ['fetch']).get('http://localhost:9000/redirect.php').then((response) => console.log(response.content)).catch((error) => console.log(error.toString()));
-
-    (new EazyHttp()).option('methods', ['fetch']).option('timeout', 5).get('http://localhost:9000/timeout.php?delay=10').then((response) => console.log(response.content)).catch((error) => console.log(error.toString()));
-
-    (new EazyHttp()).option('methods', ['xhr']).option('timeout', 5).get('http://localhost:9000/timeout.php?delay=10').then((response) => console.log(response.content)).catch((error) => console.log(error.toString()));
-
     (new EazyHttp()).option('methods', ['fetch']).post('http://localhost:9000/test.php', new FormData(form), {}, [{'name' : 'cookie', 'value' : 'value'}]).then((response) => console.log(JSON.stringify(response))).catch((error) => console.log(error.toString()));
 
     (new EazyHttp()).option('methods', ['xhr']).post('http://localhost:9000/test.php', {'foo':['bar']}, {}, [{'name' : 'cookie', 'value' : 'value'}]).then((response) => console.log(JSON.stringify(response))).catch((error) => console.log(error.toString()));
 
     (new EazyHttp()).option('methods', ['iframe']).post('http://localhost:9000/test.php', {'foo':['bar']}, {}, [{'name' : 'cookie', 'value' : 'value'}]).then((response) => console.log(JSON.stringify(response))).catch((error) => console.log(error.toString()));
+
+    return false;
+}
+function test_redirect()
+{
+    // not respected, on client-side request follows redirects all the way through
+    (new EazyHttp()).option('methods', ['fetch']).option('follow_redirects', 3).get('http://localhost:9000/redirect.php?max_redirects=10').then((response) => console.log(JSON.stringify(response))).catch((error) => console.log(error.toString()));
+
+    (new EazyHttp()).option('methods', ['xhr']).option('follow_redirects', 3).get('http://localhost:9000/redirect.php?max_redirects=10').then((response) => console.log(JSON.stringify(response))).catch((error) => console.log(error.toString()));
+
+    return false;
+}
+function test_timeout()
+{
+    // timeout respected
+    (new EazyHttp()).option('methods', ['fetch']).option('timeout', 5).get('http://localhost:9000/timeout.php?delay=10').then((response) => console.log(response.content)).catch((error) => console.log(error.toString()));
+
+    (new EazyHttp()).option('methods', ['xhr']).option('timeout', 5).get('http://localhost:9000/timeout.php?delay=10').then((response) => console.log(response.content)).catch((error) => console.log(error.toString()));
+
+    (new EazyHttp()).option('methods', ['iframe']).option('timeout', 5).get('http://localhost:9000/timeout.php?delay=10').then((response) => console.log(response.content)).catch((error) => console.log(error.toString()));
 
     return false;
 }

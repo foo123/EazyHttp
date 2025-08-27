@@ -2,6 +2,7 @@
 // run "php -S localhost:9000 server.php"
 $method = isset($_SERVER['REQUEST_METHOD']) ? strtoupper((string)$_SERVER['REQUEST_METHOD']) : 'GET';
 
+header('Content-Type: text/plain; charset=UTF-8', true, 200);
 if ('POST' === $method)
 {
     setcookie("test_cookie", 'cookie value', time()+3600);  /* expire in 1 hour */
