@@ -332,7 +332,7 @@ EazyHttp[PROTO] = {
     _do_http_fetch: function(method, uri, data, headers, cookies, cb) {
         var self = this, do_request,
             timeout = parseInt(self.option('timeout')),
-            follow_redirects = +(self.option('follow_redirects')),
+            follow_redirects = parseInt(self.option('follow_redirects')),
             return_type = String(self.option('return_type')).toLowerCase();
 
         headers = format_http_cookies(cookies, headers);
@@ -439,7 +439,7 @@ EazyHttp[PROTO] = {
     _do_http_xhr: function(method, uri, data, headers, cookies, cb) {
         var self = this, xhr = null, error = null,
             timeout = parseInt(self.option('timeout')),
-            follow_redirects = +(self.option('follow_redirects')),
+            follow_redirects = parseInt(self.option('follow_redirects')),
             return_type = String(self.option('return_type')).toLowerCase();
         try {
             xhr = 'undefined' !== typeof(XMLHttpRequest) ? (new XMLHttpRequest()) : (new ActiveXObject('Microsoft.XMLHTTP'));
@@ -524,7 +524,7 @@ EazyHttp[PROTO] = {
     _do_http_iframe: function(method, uri, data, headers, cookies, cb) {
         var self = this, form = null, iframe = null, error = null, uid,
             timeout = parseInt(self.option('timeout')),
-            follow_redirects = +(self.option('follow_redirects')),
+            follow_redirects = parseInt(self.option('follow_redirects')),
             return_type = String(self.option('return_type')).toLowerCase(),
             on_timeout = null, finish = null, done = false;
         try {
