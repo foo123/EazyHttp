@@ -281,7 +281,7 @@ class EazyHttp
                 'follow_location'   => 0 < intval($this->option('follow_redirects')),
                 'max_redirects'     => intval($this->option('follow_redirects')),
                 'timeout'           => floatval($this->option('timeout')), // sec
-                'ignore_errors'     => true,
+                'ignore_errors'     => false,
             ),
         ));
 
@@ -317,6 +317,13 @@ class EazyHttp
         $redirect = 0;
         while ($redirect <= $follow_redirects)
         {
+            if (0 < $redirect)
+            {
+                $method = 'GET';
+                $requestHeaders = array();
+                $requestBody = '';
+            }
+
             $parts = parse_url($uri);
             if (!isset($parts['host']))
             {

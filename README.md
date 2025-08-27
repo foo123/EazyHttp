@@ -3,7 +3,7 @@ EazyHttp
 
 EazyHttp, easy, simple and fast HTTP requests for PHP, JavaScript, Python
 
-version **1.0.0** in progress
+version **1.0.0**
 
 **supports**
 

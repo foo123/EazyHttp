@@ -8,22 +8,21 @@ $__DIR__ = dirname(__FILE__);
 
 $uri = /*urldecode(*/parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH)/*)*/;
 
-if (file_exists($__DIR__ . '/' . $uri)) {
-    if ('test.php' === substr($uri, -8))
+if (file_exists($__DIR__ . '/' . $uri))
+{
+    $file = basename($uri);
+    if (('.php' === substr($file, -4)) && file_exists($__DIR__ . '/' . $file))
     {
-        include($__DIR__  . '/test.php');
-    }
-    elseif ('redirect.php' === substr($uri, -12))
-    {
-        include($__DIR__  . '/redirect.php');
+        include($__DIR__ . '/' . $file);
     }
     else
     {
-        return false; // existing file, serve as-is
+        return false; // serve as-is
     }
 }
 else
 {
+    // not found
     http_response_code(404);
     echo '404';
 }

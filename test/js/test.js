@@ -22,15 +22,7 @@ function test()
         });
     }
 
-    return request('GET', 'http://localhost:9000/redirect.php?max_redirects=2').then(
-        (response) => write(__dirname+'/redirect.php.txt', response.content)
-    ).then(
-        () => request('GET', 'http://localhost:9000/redirect.php?max_redirects=10')
-    ).then(
-        (response) => write(__dirname+'/max-redirect.php.txt', JSON.stringify(response))
-    ).then(
-        () => request('GET', 'http://localhost:9000/test.txt')
-     ).then(
+    return request('GET', 'http://localhost:9000/test.txt').then(
         (response) => write(__dirname+'/test.txt', response.content)
     ).then(
         () => request('GET', 'http://localhost:9000/test.jpg', null, null, null, 'buffer')

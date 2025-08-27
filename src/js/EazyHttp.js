@@ -25,7 +25,7 @@ var VERSION = '1.0.0',
     HAS = Object[PROTO].hasOwnProperty,
     toString = Object[PROTO].toString,
 
-    isNode = ('undefined' !== typeof(global)) && ('[object Global]' === toString.call(global)),
+    isNode = ('undefined' !== typeof(global)) && ('[object global]' === toString.call(global)),
 
     http = isNode ? require('http') : null,
     https = isNode ? require('https') : null,
@@ -207,18 +207,17 @@ EazyHttp[PROTO] = {
     _do_http_node: function(method, uri, data, headers, cookies, cb) {
         var self = this, do_request,
             timeout = parseInt(self.option('timeout')),
-            follow_redirects = +(self.option('follow_redirects')),
+            follow_redirects = parseInt(self.option('follow_redirects')),
             return_type = String(self.option('return_type')).toLowerCase();
 
         headers = format_http_cookies(cookies, headers);
 
         do_request = function(uri, redirect) {
             var request = null, error = null, opts,
-                parts, protocol, host, port, path, query,
-                abort_on_redirect = null;
+                parts, protocol, host, port, path, query;
             if (redirect > follow_redirects)
             {
-                cb(new EazyHttpException('Too many redirects'), {
+                cb(new EazyHttpException('Exceeded maximum redirects of ' + follow_redirects), {
                     status  : 0,
                     content : false,
                     headers : {},
@@ -226,6 +225,15 @@ EazyHttp[PROTO] = {
                 });
                 return;
             }
+
+            if (0 < redirect)
+            {
+                method = 'GET';
+                headers = {};
+                cookies = [];
+                data = null;
+            }
+
             parts = parse_url(uri);
             host = parts['host'];
             if (!host || !host.length)
@@ -253,11 +261,6 @@ EazyHttp[PROTO] = {
                 'headers'   : headers,
                 'timeout'   : 1000*timeout // ms
             };
-            /*if ('undefined' !== typeof(AbortController))
-            {
-                abort_on_redirect = new AbortController();
-                opts['signal'] = abort_on_redirect.signal;
-            }*/
 
             try {
                 request = ('https' === protocol ? https : http).request(opts);
@@ -274,7 +277,6 @@ EazyHttp[PROTO] = {
 
                     if ((0 < follow_redirects) && (301 <= status && status <= 308) && (received_headers['location']) && (m=received_headers['location'][0].match(/^\s*(\S+)/i)) && (uri !== m[1]))
                     {
-                        //abort_on_redirect.abort(new EazyHttpException('redirected'));
                         request.abort();
                         request.destroy();
                         do_request(m[1], redirect+1);
@@ -304,7 +306,6 @@ EazyHttp[PROTO] = {
                     });
                 });
                 request.on('error', function(error) {
-                    //if ('redirected' === error.message) return;
                     cb(error, {
                         status  : 0,
                         content : false,
@@ -341,7 +342,7 @@ EazyHttp[PROTO] = {
                 on_timeout = null, abort_on_timeout = null, opts;
             if (redirect > follow_redirects)
             {
-                cb(new EazyHttpException('Too many redirects'), {
+                cb(new EazyHttpException('Exceeded maximum redirects of ' + follow_redirects), {
                     status  : 0,
                     content : false,
                     headers : {},
@@ -373,7 +374,7 @@ EazyHttp[PROTO] = {
                 on_timeout = setTimeout(function() {
                     if (!done)
                     {
-                        abort_on_timeout.abort();
+                        abort_on_timeout.abort(new EazyHttpException('Request timeout after ' + timeout + ' seconds'));
                     }
                 }, 1000*timeout); // ms
                 request.then(function(response) {
@@ -453,7 +454,7 @@ EazyHttp[PROTO] = {
             // (3 /*LOADING*/ === xhr.readyState)
             // (4 /*DONE*/ === xhr.readyState)
             xhr.ontimeout = function() {
-                cb(new EazyHttpException('Request timeout after '+timeout+' secs'), {
+                cb(new EazyHttpException('Request timeout after ' + timeout + ' seconds'), {
                     status  : 0,
                     content : false,
                     headers : {},
@@ -612,10 +613,10 @@ EazyHttp[PROTO] = {
                 data = flatten(data, {});
                 array_keys(data).forEach(function(key) {
                     var input, value = data[key];
-                    if (("undefined" !== typeof(File)) && (value instanceof File))
+                    if (('undefined' !== typeof(File)) && (value instanceof File))
                     {
                         // File
-                        if ("undefined" !== typeof(DataTransfer))
+                        if ('undefined' !== typeof(DataTransfer))
                         {
                             var dt = new DataTransfer();
                             dt.items.add(value);
@@ -674,6 +675,7 @@ EazyHttp[PROTO] = {
 function EazyHttpException(message)
 {
     Error.call(this, message);
+    this.message = message;
     this.name = 'EazyHttpException';
 }
 EazyHttpException[PROTO] = Object.create(Error[PROTO]);
@@ -692,12 +694,12 @@ function format_data(method, do_http, data, headers)
                 // String
                 /*pass*/
             }
-            else if (("undefined" !== typeof(Buffer)) && (data instanceof Buffer))
+            else if (('undefined' !== typeof(Buffer)) && (data instanceof Buffer))
             {
                 // Buffer
                 /*pass*/
             }
-            else if (("undefined" !== typeof(Uint8Array)) && (data instanceof Uint8Array))
+            else if (('undefined' !== typeof(Uint8Array)) && (data instanceof Uint8Array))
             {
                 // TypedArray
                 /*pass*/
@@ -719,42 +721,42 @@ function format_data(method, do_http, data, headers)
                 // String
                 /*pass*/
             }
-            else if (("undefined" !== typeof(FormData)) && (data instanceof FormData))
+            else if (('undefined' !== typeof(FormData)) && (data instanceof FormData))
             {
                 // FormData
                 /*pass*/
             }
-            else if (("undefined" !== typeof(URLSearchParams)) && (data instanceof URLSearchParams))
+            else if (('undefined' !== typeof(URLSearchParams)) && (data instanceof URLSearchParams))
             {
                 // URLSearchParams
                 /*pass*/
             }
-            else if (("undefined" !== typeof(File)) && (data instanceof File))
+            else if (('undefined' !== typeof(File)) && (data instanceof File))
             {
                 // File
                 /*pass*/
             }
-            else if (("undefined" !== typeof(Blob)) && (data instanceof Blob))
+            else if (('undefined' !== typeof(Blob)) && (data instanceof Blob))
             {
                 // Blob
                 /*pass*/
             }
-            else if (("undefined" !== typeof(ReadableStream)) && (data instanceof ReadableStream))
+            else if (('undefined' !== typeof(ReadableStream)) && (data instanceof ReadableStream))
             {
                 // ReadableStream
                 /*pass*/
             }
-            else if (("undefined" !== typeof(DataView)) && (data instanceof DataView))
+            else if (('undefined' !== typeof(DataView)) && (data instanceof DataView))
             {
                 // DataView
                 /*pass*/
             }
-            else if (("undefined" !== typeof(ArrayBuffer)) && (data instanceof ArrayBuffer))
+            else if (('undefined' !== typeof(ArrayBuffer)) && (data instanceof ArrayBuffer))
             {
                 // ArrayBuffer
                 /*pass*/
             }
-            else if (data && data.buffer && ("undefined" !== typeof(ArrayBuffer)) && (data.buffer instanceof ArrayBuffer))
+            else if (data && data.buffer && ('undefined' !== typeof(ArrayBuffer)) && (data.buffer instanceof ArrayBuffer))
             {
                 // TypedArray
                 /*pass*/
@@ -775,9 +777,9 @@ function format_data(method, do_http, data, headers)
 }
 function parse_http_header(responseHeader)
 {
-    var responseHeaders = {}, name, lines, parts, line, i, n;
+    var responseHeaders = {}, name, value, lines, parts, line, i, n;
     // return lowercase headers as in spec
-    if ("undefined" !== typeof(Headers) && (responseHeader instanceof Headers))
+    if ('undefined' !== typeof(Headers) && (responseHeader instanceof Headers))
     {
         responseHeader.forEach(function(value, name) {
             name = /*ucwords(*/trim(name).toLowerCase()/*, '-')*/;
@@ -792,6 +794,7 @@ function parse_http_header(responseHeader)
             if (HAS.call(responseHeader, name))
             {
                 name = /*ucwords(*/trim(name).toLowerCase()/*, '-')*/;
+                value = responseHeader[name];
                 if (HAS.call(responseHeaders, name)) responseHeaders[name].push(trim(value));
                 else responseHeaders[name] = [trim(value)];
             }
@@ -811,8 +814,9 @@ function parse_http_header(responseHeader)
                     if (parts.length > 1)
                     {
                         name = /*ucwords(*/trim(parts[0]).toLowerCase()/*, '-')*/;
-                        if (HAS.call(responseHeaders, name)) responseHeaders[name].push(trim(parts[1]));
-                        else responseHeaders[name] = [trim(parts[1])];
+                        value = parts[1];
+                        if (HAS.call(responseHeaders, name)) responseHeaders[name].push(trim(value));
+                        else responseHeaders[name] = [trim(value)];
                     }
                 }
             }
@@ -1074,7 +1078,7 @@ function extend(o1, o2, deep)
     }
     return o1;
 }
-var trim = String[PROTO].trim ? function(s) {return s.trim();} : function(s) {return s.replace(/^\s+|\s+$/g, '');};
+var trim = String[PROTO].trim ? function(s) {return String(s).trim();} : function(s) {return String(s).replace(/^\s+|\s+$/g, '');};
 function ucwords(str, sep)
 {
     var words = String(str).split(sep), i, n;
