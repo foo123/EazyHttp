@@ -74,7 +74,8 @@ EazyHttp[PROTO] = {
         }
         else
         {
-            return self._do_http('GET', uri, data, headers, cookies, cb);
+            self._do_http('GET', uri, data, headers, cookies, cb);
+            return self;
         }
     },
 
@@ -92,7 +93,8 @@ EazyHttp[PROTO] = {
         }
         else
         {
-            return self._do_http('POST', uri, data, headers, cookies, cb);
+            self._do_http('POST', uri, data, headers, cookies, cb);
+            return self;
         }
     },
 
@@ -118,11 +120,7 @@ EazyHttp[PROTO] = {
             }
         }
         headers = extend({'User-Agent': 'EazyHttp', 'Accept': '*/*'}, headers);
-        if ('POST' === method || 'PUT' === method || 'PATCH' === method)
-        {
-            data = format_data(method, data, headers);
-        }
-        else
+        if (!('POST' === method || 'PUT' === method || 'PATCH' === method))
         {
             uri += is_obj(data) ? ((-1 === uri.indexOf('?') ? '?' : '&') + http_build_query(data, '&')) : '';
             data = null;
@@ -140,7 +138,7 @@ EazyHttp[PROTO] = {
                     && (https && http)
                 )
                 {
-                    do_http = '_do_http_server';
+                    do_http = 'node';
                     break;
                 }
                 else if (
@@ -149,7 +147,7 @@ EazyHttp[PROTO] = {
                     && ('undefined' !== typeof(fetch))
                 )
                 {
-                    do_http = '_do_http_fetch';
+                    do_http = 'fetch';
                     break;
                 }
                 else if (
@@ -161,7 +159,7 @@ EazyHttp[PROTO] = {
                     )
                 )
                 {
-                    do_http = '_do_http_xhr';
+                    do_http = 'xhr';
                     break;
                 }
                 else if (
@@ -174,16 +172,16 @@ EazyHttp[PROTO] = {
                     )
                 )
                 {
-                    do_http = '_do_http_iframe';
+                    do_http = 'iframe';
                     break;
                 }
             }
             if (do_http)
             {
-                self[do_http](
+                self['_do_http_' + do_http](
                     method,
                     uri,
-                    data,
+                    format_data(method, do_http, data, headers),
                     headers,
                     cookies,
                     function(error, response) {
@@ -203,10 +201,10 @@ EazyHttp[PROTO] = {
                 cookies : []
             });
         }
-        return self;
+        do_http = null;
     },
 
-    _do_http_server: function(method, uri, data, headers, cookies, cb) {
+    _do_http_node: function(method, uri, data, headers, cookies, cb) {
         var self = this, do_request,
             timeout = parseInt(self.option('timeout')),
             follow_redirects = +(self.option('follow_redirects')),
@@ -523,7 +521,7 @@ EazyHttp[PROTO] = {
     },
 
     _do_http_iframe: function(method, uri, data, headers, cookies, cb) {
-        var self = this, form = null, iframe = null, error = null,
+        var self = this, form = null, iframe = null, error = null, uid,
             timeout = parseInt(self.option('timeout')),
             follow_redirects = +(self.option('follow_redirects')),
             return_type = String(self.option('return_type')).toLowerCase(),
@@ -595,21 +593,20 @@ EazyHttp[PROTO] = {
                     cookies : received_cookies
                 });
             };
-            ++ID;
-            iframe.id = '_eazy_http_iframe_'+String(ID);
+            uid = String(++ID) + '_' + Date.now();
+            iframe.id = '_eazy_http_iframe_' + uid;
             iframe.name = iframe.id;
             iframe.style.height = '0px';
             iframe.style.width = '0px';
             iframe.style.overflow = 'hidden';
-            form.id = '_eazy_http_form_'+String(ID);
+            form.id = '_eazy_http_form_' + uid;
+            form.style.height = '0px';
+            form.style.width = '0px';
+            form.style.overflow = 'hidden';
             form.action = uri;
             form.method = method;
-            form.enctype = HAS.call(headers, 'Content-Type') ? headers['Content-Type'] : 'application/x-www-form-urlencoded';
+            form.enctype = /*HAS.call(headers, 'Content-Type') ? headers['Content-Type'] : */'application/x-www-form-urlencoded';
             form.target = iframe.id;
-            if (is_string(data))
-            {
-                data = parse_str(data);
-            }
             if (is_obj(data))
             {
                 data = flatten(data, {});
@@ -626,6 +623,7 @@ EazyHttp[PROTO] = {
                             input.type = 'file';
                             input.name = key;
                             input.files = dt.files;
+                            form.enctype = 'multipart/form-data';
                         }
                         else
                         {
@@ -635,6 +633,7 @@ EazyHttp[PROTO] = {
                     }
                     else
                     {
+                        // default
                         input = document.createElement('input');
                         input.type = 'hidden';
                         input.name = key;
@@ -682,7 +681,7 @@ EazyHttpException[PROTO].constructor = EazyHttpException;
 EazyHttp.Exception = EazyHttpException;
 
 // utils ---------------------------------
-function format_data(method, data, headers)
+function format_data(method, do_http, data, headers)
 {
     if ('POST' === method || 'PUT' === method || 'PATCH' === method)
     {
@@ -762,7 +761,7 @@ function format_data(method, data, headers)
             }
             else if (is_obj(data))
             {
-                data = http_build_query(data, '&');
+                if ('iframe' !== do_http) data = http_build_query(data, '&');
                 headers['Content-Type'] = 'application/x-www-form-urlencoded';
             }
             else
@@ -770,12 +769,9 @@ function format_data(method, data, headers)
                 data = '';
             }
         }
+        return data;
     }
-    else
-    {
-        data = null;
-    }
-    return data;
+    return null;
 }
 function parse_http_header(responseHeader)
 {
