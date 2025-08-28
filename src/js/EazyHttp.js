@@ -246,7 +246,7 @@ EazyHttp[PROTO] = {
             port = (null != parts['port']) ? +parts['port'] : (port0 || ('https' === protocol ? 443 : 80));
             path = (null != parts['path']) ? parts['path'] : '/';
             if (!path.length) path = '/';
-            path = path_join(path, path0);
+            path = path_resolve(path, path0);
             path0 = path;
             path += (null != parts['query']) && parts['query'].length ? ('?' + parts['query']) : '';
 
@@ -315,7 +315,7 @@ EazyHttp[PROTO] = {
                     }
                 });
                 request.on('timeout', function() {
-                    cb(new EazyHttpException('Request timeout after '+timeout+' secs'), {
+                    cb(new EazyHttpException('Request timeout after ' + timeout + ' seconds'), {
                         status  : 0,
                         content : false,
                         headers : {},
@@ -368,14 +368,15 @@ EazyHttp[PROTO] = {
                 });
                 return;
             }
-            parts = parse_url(uri);
-            host = parts['host'];
-            if (!host || !host.length) host = host0;
-            protocol = (null != parts['scheme']) ? parts['scheme'].toLowerCase() : (protocol0 || 'http');
-            port = (null != parts['port']) ? +parts['port'] : (port0 || ('https' === protocol ? 443 : 80));
 
             if (0 < redirect)
             {
+                parts = parse_url(uri);
+                host = parts['host'];
+                if (!host || !host.length) host = host0;
+                protocol = (null != parts['scheme']) ? parts['scheme'].toLowerCase() : (protocol0 || 'http');
+                port = (null != parts['port']) ? +parts['port'] : (port0 || ('https' === protocol ? 443 : 80));
+
                 method = 'GET';
                 data = null;
                 //cookies = [];
@@ -625,7 +626,7 @@ EazyHttp[PROTO] = {
                 on_timeout = null;
 
                 var doc = iframe.contentDocument || iframe.contentWindow.document,
-                    content = (doc && doc.body ? doc.body.innerHTML : '') || '',
+                    content = (doc && doc.body ? (-1 === doc.contentType.toLowerCase().indexOf('text/html') ? doc.body.innerText : doc.body.innerHTML) : '') || '',
                     received_headers = doc ? {'content-type': doc.contentType + '; charset=' + doc.characterSet, 'last-modified': (new Date(doc.lastModified)).toUTCString()} : {},
                     received_cookies = doc && doc.cookie && doc.cookie.length ? doc.cookie.split(';').map(function(cookie) {return parse_cookie(cookie, false, true);}) : [];
 
@@ -736,15 +737,19 @@ function is_same_origin(host, host2, port, port2, protocol, protocol2)
     if (('.' + host2) === host.slice(-host2.length-1)) return true; // host is subdomain of host2
     return false;
 }
-function path_join(path, basepath)
+function path_resolve(path, basepath)
 {
     if (('/' === path.slice(0, 1)) || !basepath) return path; // absolute
+    if ('/' === basepath) return basepath + path; // from root
 
-    var p = path, b = basepath, absolute = 0, parts, base;
+    var p = path, b = basepath,
+        absolute = false,
+        trailing = false,
+        parts, base;
 
     if ('/' === b.slice(0, 1))
     {
-        absolute = 1;
+        absolute = true;
         b = b.slice(1);
     }
     if ('/' === b.slice(-1))
@@ -757,9 +762,11 @@ function path_join(path, basepath)
     }
     if ('/' === p.slice(-1))
     {
+        trailing = true;
         p = p.slice(0, -1);
     }
-    if (!p.length || !b.length) return (absolute ? '/' : '' ) + path;
+
+    //if (!p.length || !b.length) return (absolute ? '/' : '' ) + path;
 
     parts = p.split('/');
     base = b.split('/');
@@ -782,7 +789,9 @@ function path_join(path, basepath)
             break; // done
         }
     }
-    return (absolute ? '/' : '') + base.join('/') + '/' + parts.join('/');
+    path = (absolute ? '/' : '') + base.join('/') + '/' + parts.join('/');
+    if (trailing && ('/' !== path.slice(-1))) path += '/';
+    return path;
 }
 function format_data(method, do_http, data, headers)
 {
@@ -878,13 +887,15 @@ function format_data(method, do_http, data, headers)
 }
 function parse_http_header(responseHeader)
 {
-    var responseHeaders = {}, name, value, lines, parts, line, i, n;
+    var responseHeaders = {}, name, value,
+        multiple_headers = ['set-cookie'],
+        lines, parts, line, i, n;
     // return lowercase headers as in spec
     if ('undefined' !== typeof(Headers) && (responseHeader instanceof Headers))
     {
         responseHeader.forEach(function(value, name) {
             name = /*ucwords(*/trim(name).toLowerCase()/*, '-')*/;
-            if ('set-cookie' === name)
+            if (-1 !== multiple_headers.indexOf(name))
             {
                 if (HAS.call(responseHeaders, name)) responseHeaders[name].push(trim(value));
                 else responseHeaders[name] = [trim(value)];
@@ -903,7 +914,7 @@ function parse_http_header(responseHeader)
             {
                 name = /*ucwords(*/trim(name).toLowerCase()/*, '-')*/;
                 value = responseHeader[name];
-                if ('set-cookie' === name)
+                if (-1 !== multiple_headers.indexOf(name))
                 {
                     if (HAS.call(responseHeaders, name)) responseHeaders[name].push(trim(value));
                     else responseHeaders[name] = [trim(value)];
@@ -930,7 +941,7 @@ function parse_http_header(responseHeader)
                     {
                         name = /*ucwords(*/trim(parts[0]).toLowerCase()/*, '-')*/;
                         value = parts[1];
-                        if ('set-cookie' === name)
+                        if (-1 !== multiple_headers.indexOf(name))
                         {
                             if (HAS.call(responseHeaders, name)) responseHeaders[name].push(trim(value));
                             else responseHeaders[name] = [trim(value)];

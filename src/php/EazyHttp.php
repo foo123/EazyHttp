@@ -340,7 +340,7 @@ class EazyHttp
             $port = isset($parts['port']) ? intval($parts['port']) : ($port0 ? $port0 : ('https' === $scheme ? 443 : 80));
             $path = isset($parts['path']) ? $parts['path'] : '/';
             if (!strlen($path)) $path = '/';
-            $path = $this->path_join($path, $path0);
+            $path = $this->path_resolve($path, $path0);
             $path0 = $path;
             if (isset($parts['query']) && strlen($parts['query'])) $path .= '?' . $parts['query'];
 
@@ -363,6 +363,8 @@ class EazyHttp
             }
 
             // open socket, openssl extension needed..?
+            $timedout = false;
+            $startTime = microtime(true);
             try {
                 $fp = @fsockopen(('https' === $scheme ? 'ssl://' : '') . $host, $port, $errno, $errstr, $timeout);
             } catch (Exception $e) {
@@ -391,16 +393,17 @@ class EazyHttp
             fwrite($fp, $request);
 
             // receive response
-            $timedout = false;
-            $startTime = microtime(true);
+            $check_timeout = false;
             while (!feof($fp))
             {
-                if (microtime(true) - $startTime > $timeout)
+                if ($check_timeout && (microtime(true) - $startTime > $timeout))
                 {
                     $timedout = true;
                     break;
                 }
                 $response .= fread($fp, $chunk);
+                // check only half the time for better performance
+                $check_timeout = !$check_timeout;
             }
 
             // close socket
@@ -441,7 +444,7 @@ class EazyHttp
                 break;
             }
         }
-        return $responseBody;
+        return $redirect > $follow_redirects ? false : $responseBody;
     }
 
     protected function do_http_client($method, $uri, $requestBody = '')
@@ -507,15 +510,19 @@ class EazyHttp
         return false;
     }
 
-    protected function path_join($path, $basepath)
+    protected function path_resolve($path, $basepath)
     {
         if (('/' === substr($path, 0, 1)) || !$basepath) return $path; // absolute
+        if ('/' === $basepath) return $basepath . $path; // from root
 
-        $p = $path; $b = $basepath; $absolute = 0;
+        $p = $path;
+        $b = $basepath;
+        $absolute = false;
+        $trailing = false;
 
         if ('/' === substr($b, 0, 1))
         {
-            $absolute = 1;
+            $absolute = true;
             $b = substr($b, 1);
         }
         if ('/' === substr($b, -1))
@@ -528,9 +535,11 @@ class EazyHttp
         }
         if ('/' === substr($p, -1))
         {
+            $trailing = true;
             $p = substr($p, 0, -1);
         }
-        if (!strlen($p) || !strlen($b)) return ($absolute ? '/' : '' ) . $path;
+
+        //if (!strlen($p) || !strlen($b)) return ($absolute ? '/' : '' ) . $path;
 
         $parts = explode('/', $p);
         $base = explode('/', $b);
@@ -553,7 +562,9 @@ class EazyHttp
                 break; // done
             }
         }
-        return ($absolute ? '/' : '') . implode('/', $base) . '/' . implode('/', $parts);
+        $path = ($absolute ? '/' : '') . implode('/', $base) . '/' . implode('/', $parts);
+        if ($trailing && ('/' !== substr($path, -1))) $path .= '/';
+        return $path;
     }
 
     protected function format_http_header($headers, $output = array())
@@ -587,6 +598,7 @@ class EazyHttp
     protected function parse_http_header($responseHeader)
     {
         $responseHeaders = array();
+        $multiple_headers = array('set-cookie');
         foreach ($responseHeader as $header)
         {
             $header = explode(':', $header, 2);
@@ -595,7 +607,7 @@ class EazyHttp
                 // return lowercase headers as in spec
                 $k = /*ucwords(*/strtolower(trim($header[0]))/*, '-')*/;
                 $v = trim($header[1]);
-                if ('set-cookie' === $k)
+                if (in_array($k, $multiple_headers))
                 {
                     if (!isset($responseHeaders[$k])) $responseHeaders[$k] = array($v);
                     else $responseHeaders[$k][] = $v;
