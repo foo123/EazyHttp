@@ -143,7 +143,6 @@ EazyHttp[PROTO] = {
                 }
                 else if (
                     ('fetch' === send_method)
-                    && !isNode
                     && ('undefined' !== typeof(fetch))
                 )
                 {
@@ -210,6 +209,7 @@ EazyHttp[PROTO] = {
             follow_redirects = parseInt(self.option('follow_redirects')),
             return_type = String(self.option('return_type')).toLowerCase();
 
+        // node
         headers = format_http_cookies(cookies, headers);
 
         do_request = function(uri, redirect, protocol0, host0, port0, path0) {
@@ -352,6 +352,7 @@ EazyHttp[PROTO] = {
             follow_redirects = parseInt(self.option('follow_redirects')),
             return_type = String(self.option('return_type')).toLowerCase();
 
+        // browser and node
         headers = format_http_cookies(cookies, headers);
 
         do_request = function(uri, redirect, protocol0, host0, port0) {
@@ -486,6 +487,8 @@ EazyHttp[PROTO] = {
             timeout = parseInt(self.option('timeout')),
             follow_redirects = parseInt(self.option('follow_redirects')),
             return_type = String(self.option('return_type')).toLowerCase();
+
+        // browser
         try {
             xhr = 'undefined' !== typeof(XMLHttpRequest) ? (new XMLHttpRequest()) : (new ActiveXObject('Microsoft.XMLHTTP'));
         } catch (e) {
@@ -572,6 +575,8 @@ EazyHttp[PROTO] = {
             follow_redirects = parseInt(self.option('follow_redirects')),
             return_type = String(self.option('return_type')).toLowerCase(),
             on_timeout = null, finish = null, done = false;
+
+        // browser
         try {
             form = document.createElement('form');
             iframe = document.createElement('iframe');
@@ -797,89 +802,123 @@ function format_data(method, do_http, data, headers)
 {
     if ('POST' === method || 'PUT' === method || 'PATCH' === method)
     {
-        if (isNode)
+        // http   data can only be: string, Uint8Array, Buffer
+
+        // fetch  data can only be: string, FormData, URLSearchParams, ArrayBuffer, DataView, TypedArray, Blob, File, ReadableStream
+
+        // xhr    data can only be: string, FormData, URLSearchParams, ArrayBuffer, DataView, TypedArray, Blob
+
+        // iframe data can only be: Object (serialized into 'application/x-www-form-urlencoded' or 'multipart/form-data' if contains File entries)
+
+        if (is_string(data))
         {
-            if (is_string(data))
+            // String
+            /*pass*/
+        }
+        else if (('undefined' !== typeof(FormData)) && (data instanceof FormData))
+        {
+            // FormData
+            if ('iframe' === do_http)
             {
-                // String
-                /*pass*/
+                data = (function(o) {
+                    data.keys().forEach(function(key) {
+                        var value = data.getAll(key);
+                        o[key] = 1 < value.length ? value : (value[0] || null);
+                    });
+                    return o;
+                })({});
             }
-            else if (('undefined' !== typeof(Buffer)) && (data instanceof Buffer))
+            /*pass*/
+        }
+        else if (('undefined' !== typeof(URLSearchParams)) && (data instanceof URLSearchParams))
+        {
+            // URLSearchParams
+            if ('http' === do_http)
             {
-                // Buffer
-                /*pass*/
+                data = data.toString();
             }
-            else if (('undefined' !== typeof(Uint8Array)) && (data instanceof Uint8Array))
+            else if ('iframe' === do_http)
             {
-                // TypedArray
-                /*pass*/
+                data = (function(o) {
+                    data.forEach(function(value, key) {o[key] = value;});
+                    return o;
+                })({});
             }
-            else if (is_obj(data))
+            headers['Content-Type'] = 'application/x-www-form-urlencoded';
+            /*pass*/
+        }
+        else if (('undefined' !== typeof(ArrayBuffer)) && (data instanceof ArrayBuffer))
+        {
+            // ArrayBuffer
+            if (('http' === do_http) && ('undefined' !== typeof(Buffer)))
+            {
+                data = Buffer.from(data);
+            }
+            /*pass*/
+        }
+        else if (('undefined' !== typeof(DataView)) && (data instanceof DataView))
+        {
+            // DataView
+            /*pass*/
+        }
+        else if (
+               (('undefined' !== typeof(BigInt64Array)) && (data instanceof BigInt64Array))
+            || (('undefined' !== typeof(BigUint64Array)) && (data instanceof BigUint64Array))
+        )
+        {
+            // TypedArray
+            /*pass*/
+        }
+        else if (
+               (('undefined' !== typeof(Uint8Array)) && (data instanceof Uint8Array))
+            || (('undefined' !== typeof(Int8Array)) && (data instanceof Int8Array))
+            || (('undefined' !== typeof(Uint16Array)) && (data instanceof Uint16Array))
+            || (('undefined' !== typeof(Int16Array)) && (data instanceof Int16Array))
+            || (('undefined' !== typeof(Uint32Array)) && (data instanceof Uint32Array))
+            || (('undefined' !== typeof(Int32Array)) && (data instanceof Int32Array))
+            || (('undefined' !== typeof(Float16Array)) && (data instanceof Float16Array))
+            || (('undefined' !== typeof(Float32Array)) && (data instanceof Float32Array))
+            || (('undefined' !== typeof(Float64Array)) && (data instanceof Float64Array))
+        )
+        {
+            // TypedArray
+            if (('http' === do_http) && ('undefined' !== typeof(Uint8Array)))
+            {
+                data = new Uint8Array(data);
+            }
+            /*pass*/
+        }
+        else if (('undefined' !== typeof(Blob)) && (data instanceof Blob))
+        {
+            // Blob
+            /*pass*/
+        }
+        else if (('undefined' !== typeof(File)) && (data instanceof File))
+        {
+            // File
+            /*pass*/
+        }
+        else if (('undefined' !== typeof(ReadableStream)) && (data instanceof ReadableStream))
+        {
+            // ReadableStream
+            /*pass*/
+        }
+        else if (('undefined' !== typeof(Buffer)) && (data instanceof Buffer))
+        {
+            // Buffer
+            /*pass*/
+        }
+        else if (is_obj(data))
+        {
+            if ('iframe' !== do_http)
             {
                 data = http_build_query(data, '&');
-                headers['Content-Type'] = 'application/x-www-form-urlencoded';
             }
-            else
-            {
-                data = '';
-            }
+            headers['Content-Type'] = 'application/x-www-form-urlencoded';
         }
         else
         {
-            if (is_string(data))
-            {
-                // String
-                /*pass*/
-            }
-            else if (('undefined' !== typeof(FormData)) && (data instanceof FormData))
-            {
-                // FormData
-                /*pass*/
-            }
-            else if (('undefined' !== typeof(URLSearchParams)) && (data instanceof URLSearchParams))
-            {
-                // URLSearchParams
-                /*pass*/
-            }
-            else if (('undefined' !== typeof(File)) && (data instanceof File))
-            {
-                // File
-                /*pass*/
-            }
-            else if (('undefined' !== typeof(Blob)) && (data instanceof Blob))
-            {
-                // Blob
-                /*pass*/
-            }
-            else if (('undefined' !== typeof(ReadableStream)) && (data instanceof ReadableStream))
-            {
-                // ReadableStream
-                /*pass*/
-            }
-            else if (('undefined' !== typeof(DataView)) && (data instanceof DataView))
-            {
-                // DataView
-                /*pass*/
-            }
-            else if (('undefined' !== typeof(ArrayBuffer)) && (data instanceof ArrayBuffer))
-            {
-                // ArrayBuffer
-                /*pass*/
-            }
-            else if (data && data.buffer && ('undefined' !== typeof(ArrayBuffer)) && (data.buffer instanceof ArrayBuffer))
-            {
-                // TypedArray
-                /*pass*/
-            }
-            else if (is_obj(data))
-            {
-                if ('iframe' !== do_http) data = http_build_query(data, '&');
-                headers['Content-Type'] = 'application/x-www-form-urlencoded';
-            }
-            else
-            {
-                data = '';
-            }
+            data = '';
         }
         return data;
     }
@@ -895,14 +934,15 @@ function parse_http_header(responseHeader)
     {
         responseHeader.forEach(function(value, name) {
             name = /*ucwords(*/trim(name).toLowerCase()/*, '-')*/;
+            value = trim(String(value));
             if (-1 !== multiple_headers.indexOf(name))
             {
-                if (HAS.call(responseHeaders, name)) responseHeaders[name].push(trim(value));
-                else responseHeaders[name] = [trim(value)];
+                if (HAS.call(responseHeaders, name)) responseHeaders[name].push(value);
+                else responseHeaders[name] = [value];
             }
             else
             {
-                responseHeaders[name] = trim(value);
+                responseHeaders[name] = value;
             }
         });
     }
@@ -913,15 +953,15 @@ function parse_http_header(responseHeader)
             if (HAS.call(responseHeader, name))
             {
                 name = /*ucwords(*/trim(name).toLowerCase()/*, '-')*/;
-                value = responseHeader[name];
+                value = trim(String(responseHeader[name]));
                 if (-1 !== multiple_headers.indexOf(name))
                 {
-                    if (HAS.call(responseHeaders, name)) responseHeaders[name].push(trim(value));
-                    else responseHeaders[name] = [trim(value)];
+                    if (HAS.call(responseHeaders, name)) responseHeaders[name].push(value);
+                    else responseHeaders[name] = [value];
                 }
                 else
                 {
-                    responseHeaders[name] = trim(value);
+                    responseHeaders[name] = value;
                 }
             }
         }
@@ -940,15 +980,15 @@ function parse_http_header(responseHeader)
                     if (parts.length > 1)
                     {
                         name = /*ucwords(*/trim(parts[0]).toLowerCase()/*, '-')*/;
-                        value = parts[1];
+                        value = trim(String(parts[1]));
                         if (-1 !== multiple_headers.indexOf(name))
                         {
-                            if (HAS.call(responseHeaders, name)) responseHeaders[name].push(trim(value));
-                            else responseHeaders[name] = [trim(value)];
+                            if (HAS.call(responseHeaders, name)) responseHeaders[name].push(value);
+                            else responseHeaders[name] = [value];
                         }
                         else
                         {
-                            responseHeaders[name] = trim(value);
+                            responseHeaders[name] = value;
                         }
                     }
                 }
@@ -992,7 +1032,7 @@ function format_http_cookies(cookies, headers)
     }
     return headers;
 }
-function parse_cookie(str, isRaw, nameValueOnly)
+function parse_cookie(str, isRaw, onlyNameValue)
 {
     var cookie, parts, part, i, n, name, value, data;
     cookie = {};
@@ -1005,7 +1045,7 @@ function parse_cookie(str, isRaw, nameValueOnly)
     value = (null != part[1]) ? (!isRaw ? urldecode(trim(part[1])) : trim(part[1])) : null;
     cookie['name'] = name;
     cookie['value'] = value;
-    if (nameValueOnly) return cookie;
+    if (onlyNameValue) return cookie;
 
     data = {
         'isRaw' : isRaw,
@@ -1040,7 +1080,7 @@ function format_cookie(cookie, toSet)
     var RESERVED_CHARS_LIST = "=,; \t\r\n\v\f",
         RESERVED_CHARS_FROM = ['=', ',', ';', ' ', "\t", "\r", "\n", "\v", "\f"],
         RESERVED_CHARS_TO = ['%3D', '%2C', '%3B', '%20', '%09', '%0D', '%0A', '%0B', '%0C'],
-        isRaw, str;
+        isRaw, str, expires, maxAge;
 
     if ((null == cookie) || !is_obj(cookie)) return '';
 
@@ -1061,11 +1101,11 @@ function format_cookie(cookie, toSet)
 
     str += '=';
 
-    if (null == cookie['value'] || !String(cookie['value']).length)
+    if ((null == cookie['value']) || !String(cookie['value']).length)
     {
         if (toSet)
         {
-            str += 'deleted; Expires='+(new Date(Date.now() - 1000*31536001)).toUTCString()+'; Max-Age=0';
+            str += 'deleted; Expires=' + (new Date(Date.now() - 1000*31536001)).toUTCString()+'; Max-Age=0';
         }
         else
         {
@@ -1075,10 +1115,19 @@ function format_cookie(cookie, toSet)
     else
     {
         str += isRaw ? String(cookie['value']) : rawurlencode(String(cookie['value']));
+
+        if (is_number(cookie['expires'])) cookie['expires'] = new Date(1000*cookie['expires']);
+        expires = null != cookie['expires'] ? cookie['expires'] : (new Date(Date.now() + 1000*60));
+        if (!(expires instanceof Date)) expires = new Date(expires);
+        maxAge = Math.floor(Math.max(0, expires.getTime()-Date.now())/1000);
+
         if (toSet)
         {
-            if (!(cookie['expires'] instanceof Date)) cookie['expires'] = new Date();
-            str += '; Expires='+cookie['expires'].toUTCString()+'; Max-Age='+Math.max(0, cookie['expires'].getTime()-Date.now());
+            str += '; Expires=' + expires.toUTCString() + '; Max-Age=' + maxAge;
+        }
+        else if (!maxAge)
+        {
+            return '';
         }
     }
 
@@ -1086,12 +1135,12 @@ function format_cookie(cookie, toSet)
     {
         if ((null != cookie['path']))
         {
-            str += '; Path='+cookie['path'];
+            str += '; Path=' + cookie['path'];
         }
 
         if ((null != cookie['domain']))
         {
-            str += '; Domain='+cookie['domain'];
+            str += '; Domain=' + cookie['domain'];
         }
 
         if (cookie['secure'])
@@ -1106,7 +1155,7 @@ function format_cookie(cookie, toSet)
 
         if ((null != cookie['samesite']))
         {
-            str += '; SameSite='+cookie['samesite'];
+            str += '; SameSite=' + cookie['samesite'];
         }
 
         if (cookie['partitioned'])

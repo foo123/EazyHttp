@@ -12,6 +12,7 @@
 <form id="form" action="/test.php" method="post" enctype="application/x-www-form-urlencoded" onsubmit="return test(this);">
     <fieldset>
         <p>foo: <input type="text" name="foo[0]" value="bar" /></p>
+        <p>file: <input type="file" name="file" accept="text/*" /></p>
         <button type="submit">Test Submit</button>
         &nbsp;&nbsp;
         <button onclick="return test_redirect();">Test Redirect</button>
@@ -26,9 +27,9 @@ function test(form)
 {
     (new EazyHttp()).option('methods', ['fetch']).post('http://localhost:9000/test.php', new FormData(form), {}, [{'name' : 'cookie', 'value' : 'value'}]).then((response) => console.log(JSON.stringify(response))).catch((error) => console.log(error.toString()));
 
-    (new EazyHttp()).option('methods', ['xhr']).post('http://localhost:9000/test.php', {'foo':['bar']}, {}, [{'name' : 'cookie', 'value' : 'value'}]).then((response) => console.log(JSON.stringify(response))).catch((error) => console.log(error.toString()));
+    (new EazyHttp()).option('methods', ['xhr']).post('http://localhost:9000/test.php', new FormData(form), {}, [{'name' : 'cookie', 'value' : 'value'}]).then((response) => console.log(JSON.stringify(response))).catch((error) => console.log(error.toString()));
 
-    (new EazyHttp()).option('methods', ['iframe']).post('http://localhost:9000/test.php', {'foo':['bar']}, {}, [{'name' : 'cookie', 'value' : 'value'}]).then((response) => console.log(JSON.stringify(response))).catch((error) => console.log(error.toString()));
+    (new EazyHttp()).option('methods', ['iframe']).post('http://localhost:9000/test.php', new FormData(form), {}, [{'name' : 'cookie', 'value' : 'value'}]).then((response) => console.log(JSON.stringify(response))).catch((error) => console.log(error.toString()));
 
     return false;
 }

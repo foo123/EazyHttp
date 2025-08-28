@@ -22,6 +22,7 @@ version **1.0.0**
 **JavaScript/Node**
 
 * `http`/`https` (if available)
+* `fetch` (if available)
 
 **example**
 

@@ -6,10 +6,10 @@ const EazyHttp = require('../../src/js/EazyHttp.js');
 
 function test()
 {
-    function request(method, uri, data, headers, cookies, return_type)
+    function request(method, do_http, uri, data, headers, cookies, return_type)
     {
         // returns promise
-        return (new EazyHttp()).option('return_type', return_type || 'string')['POST' === method ? 'post' : 'get'](uri, data, headers, cookies);
+        return (new EazyHttp()).option('methods', [do_http]).option('return_type', return_type || 'string')['POST' === method ? 'post' : 'get'](uri, data, headers, cookies);
     }
     function write(file, content)
     {
@@ -22,20 +22,28 @@ function test()
         });
     }
 
-    return request('GET', 'http://localhost:9000/test.txt').then(
+    return request('GET', 'fetch', 'http://localhost:9000/test.txt').then(
         (response) => write(__dirname+'/test.txt', response.content)
     ).then(
-        () => request('GET', 'http://localhost:9000/test.jpg', null, null, null, 'buffer')
+        () => request('GET', 'http', 'http://localhost:9000/test.jpg', null, null, null, 'buffer')
     ).then(
-        (response) => write(__dirname+'/test.jpg', Buffer.from(response.content))
+        (response) => write(__dirname+'/test.jpg', response.content)
     ).then(
-        () => request('GET', 'http://localhost:9000/test.php', {'foo' : ['bar']}, {}, [{'name' : 'cookie', 'value' : 'value'}])
+        () => request('GET', 'http', 'http://localhost:9000/test.php', {'foo' : ['bar']}, {}, [{'name' : 'cookie', 'value' : 'value'}])
     ).then(
-        (response) => write(__dirname+'/get-test.php.txt', JSON.stringify(response))
+        (response) => write(__dirname+'/get-test-http.php.txt', JSON.stringify(response))
     ).then(
-        () => request('POST', 'http://localhost:9000/test.php', {'foo' : ['bar']}, {}, [{'name' : 'cookie', 'value' : 'value'}])
+        () => request('GET', 'fetch', 'http://localhost:9000/test.php', {'foo' : ['bar']}, {}, [{'name' : 'cookie', 'value' : 'value'}])
     ).then(
-        (response) => write(__dirname+'/post-test.php.txt', JSON.stringify(response))
+        (response) => write(__dirname+'/get-test-fetch.php.txt', JSON.stringify(response))
+    ).then(
+        () => request('POST', 'http', 'http://localhost:9000/test.php', {'foo' : ['bar']}, {}, [{'name' : 'cookie', 'value' : 'value'}])
+    ).then(
+        (response) => write(__dirname+'/post-test-http.php.txt', JSON.stringify(response))
+    ).then(
+        () => request('POST', 'fetch', 'http://localhost:9000/test.php', {'foo' : ['bar']}, {}, [{'name' : 'cookie', 'value' : 'value'}])
+    ).then(
+        (response) => write(__dirname+'/post-test-fetch.php.txt', JSON.stringify(response))
     );
 }
 

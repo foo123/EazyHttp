@@ -6,10 +6,10 @@ const EazyHttp = require('../../src/js/EazyHttp.js');
 
 function test()
 {
-    function request(uri, redirects)
+    function request(uri, do_http, redirects)
     {
         // returns promise
-        return (new EazyHttp()).option('follow_redirects', redirects).get(uri);
+        return (new EazyHttp()).option('methods', [do_http]).option('follow_redirects', redirects).get(uri);
     }
     function write(file, content)
     {
@@ -22,12 +22,20 @@ function test()
         });
     }
 
-    return request('http://localhost:9000/redirect.php?max_redirects=2', 3).then(
-        (response) => write(__dirname+'/redirect.php.txt', response.content)
+    return request('http://localhost:9000/redirect.php?max_redirects=2', 'fetch', 3).then(
+        (response) => write(__dirname+'/redirect-fetch.php.txt', response.content)
     ).then(
-        () => request('http://localhost:9000/redirect.php?max_redirects=10', 3)
+        () => request('http://localhost:9000/redirect.php?max_redirects=10', 'fetch', 3)
     ).then(
-        (response) => write(__dirname+'/max-redirect.php.txt', JSON.stringify(response))
+        (response) => write(__dirname+'/max-redirect-fetch.php.txt', JSON.stringify(response))
+    ).then(
+        () => request('http://localhost:9000/redirect.php?max_redirects=2', 'http', 3)
+    ).then(
+        (response) => write(__dirname+'/redirect-http.php.txt', response.content)
+    ).then(
+        () => request('http://localhost:9000/redirect.php?max_redirects=10', 'http', 3)
+    ).then(
+        (response) => write(__dirname+'/max-redirect-http.php.txt', JSON.stringify(response))
     );
 }
 

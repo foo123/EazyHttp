@@ -378,6 +378,8 @@ class EazyHttp
 
             // make request
             $contentLength = strlen((string)$requestBody);
+            $headers['Content-Length'] = $contentLength;
+            $headers['Connection'] = 'close';
             $requestHeaders = $this->format_http_cookies($cookies, $this->format_http_header($headers, array()));
             $chunk = 1024; // bytes
 
@@ -387,8 +389,6 @@ class EazyHttp
             $request .= "$method $path HTTP/1.1";
             $request .= "\r\n"."Host: $host" . (('https' === $scheme && 443 === $port) || ('http' === $scheme && 80 === $port) ? '' : ":{$port}");
             if (!empty($requestHeaders)) $request .= "\r\n".implode("\r\n", (array)$requestHeaders);
-            $request .= "\r\n"."Content-Length: $contentLength";
-            $request .= "\r\n"."Connection: close";
             $request .= "\r\n\r\n".($contentLength ? ((string)$requestBody) : "");
             fwrite($fp, $request);
 
@@ -601,7 +601,7 @@ class EazyHttp
         $multiple_headers = array('set-cookie');
         foreach ($responseHeader as $header)
         {
-            $header = explode(':', $header, 2);
+            $header = explode(':', (string)$header, 2);
             if (count($header) >= 2)
             {
                 // return lowercase headers as in spec
@@ -729,7 +729,7 @@ class EazyHttp
         {
             if ($toSet)
             {
-                $str .= 'deleted; Expires='.gmdate('D, d M Y H:i:s T', time() - 31536001).'; Max-Age=0';
+                $str .= 'deleted; Expires=' . gmdate('D, d M Y H:i:s T', time() - 31536001).'; Max-Age=0';
             }
             else
             {
@@ -739,12 +739,17 @@ class EazyHttp
         else
         {
             $str .= $isRaw ? strval($cookie['value']) : rawurlencode(strval($cookie['value']));
+
+            $expires = isset($cookie['expires']) ? (intval($cookie['expires'])||0) : (time() + 60);
+            $maxAge = max(0, $expires-time());
+
             if ($toSet)
             {
-                if (0 !== $cookie['expires'])
-                {
-                    $str .= '; Expires='.gmdate('D, d M Y H:i:s T', $cookie['expires']).'; Max-Age='.max(0, $cookie['expires']-time());
-                }
+                $str .= '; Expires=' . gmdate('D, d M Y H:i:s T', $expires) . '; Max-Age=' . $maxAge;
+            }
+            elseif (!$maxAge)
+            {
+                return '';
             }
         }
 
@@ -752,12 +757,12 @@ class EazyHttp
         {
             if (isset($cookie['path']))
             {
-                $str .= '; Path='.$cookie['path'];
+                $str .= '; Path=' . $cookie['path'];
             }
 
             if (isset($cookie['domain']))
             {
-                $str .= '; Domain='.$cookie['domain'];
+                $str .= '; Domain=' . $cookie['domain'];
             }
 
             if (!empty($cookie['secure']))
@@ -772,7 +777,7 @@ class EazyHttp
 
             if (isset($cookie['samesite']))
             {
-                $str .= '; SameSite='.$cookie['samesite'];
+                $str .= '; SameSite=' . $cookie['samesite'];
             }
 
             if (!empty($cookie['partitioned']))

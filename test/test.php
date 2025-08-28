@@ -10,6 +10,8 @@ if ('POST' === $method)
     echo json_encode($_COOKIE)."\n\n";
     echo "POST:";
     echo json_encode($_POST)."\n\n";
+    echo "FILES:";
+    echo json_encode($_FILES)."\n\n";
 }
 elseif ('GET' === $method)
 {
