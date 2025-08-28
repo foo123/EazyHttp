@@ -27,12 +27,8 @@ var VERSION = '1.0.0',
 
     isNode = ('undefined' !== typeof(global)) && ('[object global]' === toString.call(global)),
 
-    http = isNode ? require('http') : null,
-    https = isNode ? require('https') : null,
-
     ID = 0
 ;
-
 function EazyHttp()
 {
     var self = this;
@@ -135,7 +131,7 @@ EazyHttp[PROTO] = {
                 if (
                     ('http' === send_method)
                     && isNode
-                    && (https && http)
+                    && (https() && http())
                 )
                 {
                     do_http = 'node';
@@ -280,7 +276,7 @@ EazyHttp[PROTO] = {
             };
 
             try {
-                request = ('https' === protocol ? https : http).request(opts);
+                request = ('https' === protocol ? https() : http()).request(opts);
             } catch (e) {
                 request = null;
                 error = e;
@@ -733,6 +729,38 @@ EazyHttpException[PROTO].constructor = EazyHttpException;
 EazyHttp.Exception = EazyHttpException;
 
 // utils ---------------------------------
+function http()
+{
+    if (isNode)
+    {
+        if ('undefined' === typeof(http.module))
+        {
+            try {
+                http.module = require('http');
+            } catch (e) {
+                http.module = null;
+            }
+        }
+        return http.module;
+    }
+    return null;
+}
+function https()
+{
+    if (isNode)
+    {
+        if ('undefined' === typeof(https.module))
+        {
+            try {
+                https.module = require('https');
+            } catch (e) {
+                https.module = null;
+            }
+        }
+        return https.module;
+    }
+    return null;
+}
 function is_same_origin(host, host2, port, port2, protocol, protocol2)
 {
     if ((port !== port2) || (protocol !== protocol2)) return false;
