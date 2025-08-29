@@ -8,5 +8,6 @@ $delay = isset($_GET['delay']) ? intval($_GET['delay']) : 5;
 
 sleep($delay);
 
+http_response_code(200);
 header('Content-Type: text/plain; charset=UTF-8', true, 200);
 echo "content after {$delay} seconds";

@@ -308,7 +308,10 @@ class EazyHttp
         if (!empty($http_response_header))
         {
             $responseHeader = array_merge(array(), $http_response_header);
-            if (!empty($responseHeader) && preg_match('#HTTP/\\S*\\s+(\\d{3})#', $responseHeader[0], $m)) $responseStatus = (int)$m[1];
+            if (!empty($responseHeader) && preg_match_all('#HTTP/[\\d\\.]+\\s+(\\d{3})#', implode("\r\n", $responseHeader), $m, PREG_OFFSET_CAPTURE))
+            {
+                $responseStatus = intval($m[1][count($m[1])-1][0]);
+            }
             $responseHeaders = $this->parse_http_header($responseHeader);
             $responseCookies = empty($responseHeaders['set-cookie']) ? array() : $this->parse_http_cookies($responseHeaders['set-cookie']);
         }
@@ -363,6 +366,7 @@ class EazyHttp
 
                 if (!$this->is_same_origin($host, $host0, $port, $port0, $scheme, $scheme0))
                 {
+                    $responseHeaders = array();
                     $cookies = array();
                     //if (isset($headers['Cookie'])) unset($headers['Cookie']);
                     if (isset($headers['Authorization'])) unset($headers['Authorization']);
@@ -388,6 +392,7 @@ class EazyHttp
             // make request
             $contentLength = strlen((string)$requestBody);
             $headers['Content-Length'] = $contentLength;
+            $headers['Host'] = $host . (('https' === $scheme && 443 === $port) || ('http' === $scheme && 80 === $port) ? '' : ":{$port}");
             $headers['Connection'] = 'close';
             if (isset($headers['Cookie'])) unset($headers['Cookie']);
             $requestHeaders = $this->format_http_cookies($cookies, $this->format_http_header($headers, array()));
@@ -397,9 +402,8 @@ class EazyHttp
 
             // send request
             $request .= "$method $path HTTP/1.1";
-            $request .= "\r\n"."Host: $host" . (('https' === $scheme && 443 === $port) || ('http' === $scheme && 80 === $port) ? '' : ":{$port}");
-            if (!empty($requestHeaders)) $request .= "\r\n".implode("\r\n", (array)$requestHeaders);
-            $request .= "\r\n\r\n".($contentLength ? ((string)$requestBody) : "");
+            $request .= "\r\n" . implode("\r\n", $requestHeaders);
+            $request .= "\r\n\r\n" . ($contentLength ? ((string)$requestBody) : '');
             fwrite($fp, $request);
 
             // receive response
@@ -429,11 +433,11 @@ class EazyHttp
             $response = explode("\r\n\r\n", $response, 2);
             $responseHeader = isset($response[0]) ? $response[0] : '';
             $responseBody = isset($response[1]) ? $response[1] : '';
-            if (!empty($responseHeader) && preg_match('#HTTP/\\S*\\s+(\\d{3})#i', $responseHeader, $m))
+            if (!empty($responseHeader) && preg_match('#HTTP/[\\d\\.]+\\s+(\\d{3})#', $responseHeader, $m))
             {
-                $responseStatus = (int)$m[1];
+                $responseStatus = intval($m[1]);
             }
-            $responseHeaders = $this->parse_http_header(empty($responseHeader) ? array() : array_map('trim', preg_split('#[\\r\\n]+#', $responseHeader)));
+            $responseHeaders = array_merge(empty($responseHeaders) ? array() : $responseHeaders, empty($responseHeader) ? array() : $this->parse_http_header(array_map('trim', preg_split('#[\\r\\n]+#', $responseHeader))));
             $responseCookies = empty($responseHeaders['set-cookie']) ? array() : $this->parse_http_cookies($responseHeaders['set-cookie']);
             if (isset($responseHeaders['transfer-encoding']) && ('chunked' === strtolower($responseHeaders['transfer-encoding'])))
             {

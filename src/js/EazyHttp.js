@@ -218,7 +218,7 @@ EazyHttp[PROTO] = {
             return_type = String(self.option('return_type')).toLowerCase();
 
         // node
-        do_request = function(uri, redirect, protocol0, host0, port0, path0) {
+        do_request = function(uri, redirect, protocol0, host0, port0, path0, received_headers0) {
             var request = null, error = null, opts,
                 parts, protocol, host, port, path;
             if (redirect > follow_redirects)
@@ -267,6 +267,7 @@ EazyHttp[PROTO] = {
 
                 if (!is_same_origin(host, host0, port, port0, protocol, protocol0))
                 {
+                    received_headers0 = null;
                     cookies = {};
                     //if (HAS.call(headers, 'Cookie')) delete headers['Cookie'];
                     if (HAS.call(headers, 'Authorization')) delete headers['Authorization'];
@@ -297,19 +298,20 @@ EazyHttp[PROTO] = {
             {
                 request.on('response', function(response) {
                     var m, status = +response.statusCode, body,
-                        received_headers = parse_http_header(response.headers),
-                        received_cookies = parse_http_cookies(received_headers['set-cookie']);
+                        received_headers, received_cookies;
 
-                    if ((0 < follow_redirects) && (301 <= status && status <= 308) && (received_headers['location']) && (m=received_headers['location'].match(/^\s*(\S+)/i))/* && (uri !== m[1])*/)
+                    if ((0 < follow_redirects) && (301 <= status && status <= 308) && (response.headers['location']) && (m=response.headers['location'].match(/^\s*(\S+)/i))/* && (uri !== m[1])*/)
                     {
                         request.abort();
                         request.destroy();
                         //cookies = merge_cookies(cookies, received_cookies);
                         cookies = {}; // do not send any cookies
-                        do_request(m[1], redirect+1, protocol, host, port, path0);
+                        do_request(m[1], redirect+1, protocol, host, port, path0, extend(is_obj(received_headers0) ? received_headers0 : {}, parse_http_header(response.headers)));
                     }
                     else
                     {
+                        received_headers = parse_http_header(response.headers);
+                        received_cookies = parse_http_cookies(received_headers['set-cookie']);
                         body = [];
                         response.on('data', function(chunk) {
                             body.push('buffer' === return_type ? Buffer.from(chunk) : chunk);
@@ -363,7 +365,7 @@ EazyHttp[PROTO] = {
             return_type = String(self.option('return_type')).toLowerCase();
 
         // browser and node
-        do_request = function(uri, redirect, protocol0, host0, port0) {
+        do_request = function(uri, redirect, protocol0, host0, port0, received_headers0) {
             var request = null, error = null, done = false,
                 on_timeout = null, abort_on_timeout = null,
                 parts, protocol, host, port, opts;
@@ -395,6 +397,7 @@ EazyHttp[PROTO] = {
 
                 if (!is_same_origin(host, host0, port, port0, protocol, protocol0))
                 {
+                    received_headers0 = null;
                     cookies = {};
                     //if (HAS.call(headers, 'Cookie')) delete headers['Cookie'];
                     if (HAS.call(headers, 'Authorization')) delete headers['Authorization'];
@@ -434,23 +437,24 @@ EazyHttp[PROTO] = {
                 }, 1000*timeout); // ms
                 request.then(function(response) {
                     var m, p, status = +response.status, body,
-                        received_headers = parse_http_header(response.headers),
-                        received_cookies = parse_http_cookies(received_headers['set-cookie']);
+                        received_headers, received_cookies;
 
                     done = true;
                     if (on_timeout) clearTimeout(on_timeout);
                     on_timeout = null;
 
-                    /*if ((0 < follow_redirects) && ((0 === status) || (301 <= status && status <= 308)) && response.url/* && (received_headers['location']) && (m=received_headers['location'].match(/^\s*(\S+)/i)) && (uri !== m[1])* /)
+                    /*if ((0 < follow_redirects) && ((0 === status) || (301 <= status && status <= 308)) && response.url/* && (response.headers.get('location')) && (m=response.headers.get('location').match(/^\s*(\S+)/i)) && (uri !== m[1])* /)
                     {
                         // does not work
                         p = parse_url(request.url);
                         //cookies = merge_cookies(cookies, received_cookies);
                         cookies = {}; // do not send any cookies, on browser they are sent
-                        do_request(/*m[1]* /response.url, redirect+1, p['scheme'], p['host'], p['port']);
+                        do_request(/*m[1]* /response.url, redirect+1, p['scheme'], p['host'], p['port'],  extend(is_obj(received_headers0) ? received_headers0 : {}, parse_http_header(response.headers)));
                     }
                     else
                     {*/
+                        received_headers = parse_http_header(response.headers);
+                        received_cookies = parse_http_cookies(received_headers['set-cookie']);
                         body = 'buffer' === return_type ? response.arrayBuffer() : response.text();
                         body.then(function(content) {
                             cb(null, {
@@ -518,7 +522,7 @@ EazyHttp[PROTO] = {
                     status  : 0,
                     content : false,
                     headers : {},
-                    cookies : []
+                    cookies : {}
                 });
             };
             xhr.onerror = function() {
@@ -1019,6 +1023,8 @@ function parse_http_header(responseHeader)
                 responseHeaders[name] = value;
             }
         });
+        value = responseHeader.getSetCookie();
+        if (value.length) responseHeaders['set-cookie'] = value;
     }
     else if (is_obj(responseHeader))
     {
