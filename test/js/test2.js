@@ -5,7 +5,7 @@ const EazyHttp = require('../../src/js/EazyHttp.js');
 
 function test()
 {
-    function request(uri, do_http)
+    function request(do_http, uri)
     {
         // returns Promise
         return (new EazyHttp()).option('methods', [do_http]).get('https://github.com/foo123/EazyHttp');
@@ -20,10 +20,10 @@ function test()
         });
     }
 
-    return request('https://github.com/foo123/EazyHttp', 'http').then(
+    return request('http', 'https://github.com/foo123/EazyHttp').then(
         (response) => write(__dirname+'/test2-http.js.html', response.content)
     ).then(
-        () => request('https://github.com/foo123/EazyHttp', 'fetch')
+        () => request('fetch', 'https://github.com/foo123/EazyHttp')
     ).then(
         (response) => write(__dirname+'/test2-fetch.js.html', response.content)
     );

@@ -1,43 +1,59 @@
 <?php
-// run "php -S localhost:9000 server.php"
+// run "php -S localhost:9000 test-server.php"
 
 include(dirname(__FILE__) . '/../../src/php/EazyHttp.php');
 
+function request($do_http, $uri, $timeout)
+{
+    return (new EazyHttp())
+        ->option('methods',     [$do_http])
+        ->option('timeout', $timeout)
+        ->get('http://localhost:9000' . $uri)
+    ;
+}
 function test()
 {
-    $response1c = (new EazyHttp())
-        ->option('timeout', 5)
-        ->option('methods',     ['curl'])
-        ->get('http://localhost:9000/timeout.php?delay=2')
-    ;
-    $response1f = (new EazyHttp())
-        ->option('timeout', 5)
-        ->option('methods',     ['file'])
-        ->get('http://localhost:9000/timeout.php?delay=2')
-    ;
-    $response1s = (new EazyHttp())
-        ->option('timeout', 5)
-        ->option('methods',     ['socket'])
-        ->get('http://localhost:9000/timeout.php?delay=2')
-    ;
-    file_put_contents(dirname(__FILE__).'/timeout.php.txt', implode("\n\n----\n\n", [$response1c->content, $response1f->content, $response1s->content]));
+    try {
+        $response = request('curl', '/test/timeout.php?delay=2', 5);
+        file_put_contents(dirname(__FILE__).'/test-timeout-curl.php.txt', $response->content);
+    } catch (Exception $error) {
+        echo (string)$error;
+    }
 
-    $response2c = (new EazyHttp())
-        ->option('timeout', 5)
-        ->option('methods',     ['curl'])
-        ->get('http://localhost:9000/timeout.php?delay=10')
-    ;
-    $response2f = (new EazyHttp())
-        ->option('timeout', 5)
-        ->option('methods',     ['file'])
-        ->get('http://localhost:9000/timeout.php?delay=10')
-    ;
-    $response2s = (new EazyHttp())
-        ->option('timeout', 5)
-        ->option('methods',     ['socket'])
-        ->get('http://localhost:9000/timeout.php?delay=10')
-    ;
-    file_put_contents(dirname(__FILE__).'/max-timeout.php.txt', json_encode([$response2c, $response2f, $response2s]));
+    try {
+        $response = request('file', '/test/timeout.php?delay=2', 5);
+        file_put_contents(dirname(__FILE__).'/test-timeout-file.php.txt', $response->content);
+    } catch (Exception $error) {
+        echo (string)$error;
+    }
+
+    try {
+        $response = request('socket', '/test/timeout.php?delay=2', 5);
+        file_put_contents(dirname(__FILE__).'/test-timeout-socket.php.txt', $response->content);
+    } catch (Exception $error) {
+        echo (string)$error;
+    }
+
+    try {
+        $response = request('curl', '/test/timeout.php?delay=10', 5);
+        file_put_contents(dirname(__FILE__).'/test-timeout-max-curl.php.txt', json_encode($response));
+    } catch (Exception $error) {
+        echo (string)$error;
+    }
+
+    try {
+        $response = request('file', '/test/timeout.php?delay=10', 5);
+        file_put_contents(dirname(__FILE__).'/test-timeout-max-file.php.txt', json_encode($response));
+    } catch (Exception $error) {
+        echo (string)$error;
+    }
+
+    try {
+        $response = request('socket', '/test/timeout.php?delay=10', 5);
+        file_put_contents(dirname(__FILE__).'/test-timeout-max-socket.php.txt', json_encode($response));
+    } catch (Exception $error) {
+        echo (string)$error;
+    }
 }
 
 test();

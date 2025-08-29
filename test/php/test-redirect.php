@@ -1,43 +1,59 @@
 <?php
-// run "php -S localhost:9000 server.php"
+// run "php -S localhost:9000 test-server.php"
 
 include(dirname(__FILE__) . '/../../src/php/EazyHttp.php');
 
+function request($do_http, $uri, $follow_redirects)
+{
+    return (new EazyHttp())
+        ->option('methods',     [$do_http])
+        ->option('follow_redirects', $follow_redirects)
+        ->get('http://localhost:9000' . $uri)
+    ;
+}
 function test()
 {
-    $response1c = (new EazyHttp())
-        ->option('follow_redirects', 3)
-        ->option('methods',     ['curl'])
-        ->get('http://localhost:9000/redirect.php?max_redirects=2')
-    ;
-    $response1f = (new EazyHttp())
-        ->option('follow_redirects', 3)
-        ->option('methods',     ['file'])
-        ->get('http://localhost:9000/redirect.php?max_redirects=2')
-    ;
-    $response1s = (new EazyHttp())
-        ->option('follow_redirects', 3)
-        ->option('methods',     ['socket'])
-        ->get('http://localhost:9000/redirect.php?max_redirects=2')
-    ;
-    file_put_contents(dirname(__FILE__).'/redirect.php.txt', implode("\n\n----\n\n", [$response1c->content, $response1f->content, $response1s->content]));
+    try {
+        $response = request('curl', '/test/redirect.php?max_redirects=2', 3);
+        file_put_contents(dirname(__FILE__).'/test-redirect-curl.php.txt', json_encode($response));
+    } catch (Exception $error) {
+        echo (string)$error;
+    }
 
-    $response2c = (new EazyHttp())
-        ->option('follow_redirects', 3)
-        ->option('methods',     ['curl'])
-        ->get('http://localhost:9000/redirect.php?max_redirects=10')
-    ;
-    $response2f = (new EazyHttp())
-        ->option('follow_redirects', 3)
-        ->option('methods',     ['file'])
-        ->get('http://localhost:9000/redirect.php?max_redirects=10')
-    ;
-    $response2s = (new EazyHttp())
-        ->option('follow_redirects', 3)
-        ->option('methods',     ['socket'])
-        ->get('http://localhost:9000/redirect.php?max_redirects=10')
-    ;
-    file_put_contents(dirname(__FILE__).'/max-redirect.php.txt', json_encode([$response2c, $response2f, $response2s]));
+    try {
+        $response = request('file', '/test/redirect.php?max_redirects=2', 3);
+        file_put_contents(dirname(__FILE__).'/test-redirect-file.php.txt', json_encode($response));
+    } catch (Exception $error) {
+        echo (string)$error;
+    }
+
+    try {
+        $response = request('socket', '/test/redirect.php?max_redirects=2', 3);
+        file_put_contents(dirname(__FILE__).'/test-redirect-socket.php.txt', json_encode($response));
+    } catch (Exception $error) {
+        echo (string)$error;
+    }
+
+    try {
+        $response = request('curl', '/test/redirect.php?max_redirects=10', 3);
+        file_put_contents(dirname(__FILE__).'/test-redirect-max-curl.php.txt', json_encode($response));
+    } catch (Exception $error) {
+        echo (string)$error;
+    }
+
+    try {
+        $response = request('file', '/test/redirect.php?max_redirects=10', 3);
+        file_put_contents(dirname(__FILE__).'/test-redirect-max-file.php.txt', json_encode($response));
+    } catch (Exception $error) {
+        echo (string)$error;
+    }
+
+    try {
+        $response = request('socket', '/test/redirect.php?max_redirects=10', 3);
+        file_put_contents(dirname(__FILE__).'/test-redirect-max-socket.php.txt', json_encode($response));
+    } catch (Exception $error) {
+        echo (string)$error;
+    }
 }
 
 test();

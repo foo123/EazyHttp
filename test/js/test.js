@@ -1,15 +1,15 @@
-// run "php -S localhost:9000 server.php"
+// run "php -S localhost:9000 test-server.php"
 "use strict";
 
 const fs = require('fs');
 const EazyHttp = require('../../src/js/EazyHttp.js');
 
-function test()
+async function test()
 {
     function request(method, do_http, uri, data, headers, cookies, return_type)
     {
         // returns promise
-        return (new EazyHttp()).option('methods', [do_http]).option('return_type', return_type || 'string')['POST' === method ? 'post' : 'get'](uri, data, headers, cookies);
+        return (new EazyHttp()).option('methods', [do_http]).option('return_type', return_type || 'string')['POST' === method ? 'post' : 'get']('http://localhost:9000' + uri, data, headers, cookies);
     }
     function write(file, content)
     {
@@ -22,29 +22,63 @@ function test()
         });
     }
 
-    return request('GET', 'fetch', 'http://localhost:9000/test.txt').then(
-        (response) => write(__dirname+'/test.txt', response.content)
-    ).then(
-        () => request('GET', 'http', 'http://localhost:9000/test.jpg', null, null, null, 'buffer')
-    ).then(
-        (response) => write(__dirname+'/test.jpg', response.content)
-    ).then(
-        () => request('GET', 'http', 'http://localhost:9000/test.php', {'foo' : ['bar']}, {}, [{'name' : 'cookie', 'value' : 'value'}])
-    ).then(
-        (response) => write(__dirname+'/get-test-http.php.txt', JSON.stringify(response))
-    ).then(
-        () => request('GET', 'fetch', 'http://localhost:9000/test.php', {'foo' : ['bar']}, {}, [{'name' : 'cookie', 'value' : 'value'}])
-    ).then(
-        (response) => write(__dirname+'/get-test-fetch.php.txt', JSON.stringify(response))
-    ).then(
-        () => request('POST', 'http', 'http://localhost:9000/test.php', {'foo' : ['bar']}, {}, [{'name' : 'cookie', 'value' : 'value'}])
-    ).then(
-        (response) => write(__dirname+'/post-test-http.php.txt', JSON.stringify(response))
-    ).then(
-        () => request('POST', 'fetch', 'http://localhost:9000/test.php', {'foo' : ['bar']}, {}, [{'name' : 'cookie', 'value' : 'value'}])
-    ).then(
-        (response) => write(__dirname+'/post-test-fetch.php.txt', JSON.stringify(response))
-    );
+    let response;
+
+    try {
+        response = await request('GET', 'http', '/test/test.txt');
+        await write(__dirname+'/test-http.txt', response.content);
+    } catch (error) {
+        console.error(error);
+    }
+
+    try {
+        response = await request('GET', 'fetch', '/test/test.txt');
+        await write(__dirname+'/test-fetch.txt', response.content);
+    } catch (error) {
+        console.error(error);
+    }
+
+    try {
+        response = await request('GET', 'http', '/test/test.jpg', null, null, null, 'buffer');
+        await write(__dirname+'/test-http.jpg', response.content);
+    } catch (error) {
+        console.error(error);
+    }
+
+    try {
+        response = await request('GET', 'fetch', '/test/test.jpg', null, null, null, 'buffer');
+        await write(__dirname+'/test-fetch.jpg', Buffer.from(response.content));
+    } catch (error) {
+        console.error(error);
+    }
+
+    try {
+        response = await request('GET', 'http', '/test/test.php', {'foo' : ['bar']}, {}, {'cookie' : 'value'});
+        await write(__dirname+'/test-get-http.php.txt', JSON.stringify(response));
+    } catch (error) {
+        console.error(error);
+    }
+
+    try {
+        response = await request('GET', 'fetch', '/test/test.php', {'foo' : ['bar']}, {}, {'cookie' : 'value'});
+        await write(__dirname+'/test-get-fetch.php.txt', JSON.stringify(response));
+    } catch (error) {
+        console.error(error);
+    }
+
+    try {
+        response = await request('POST', 'http', '/test/test.php', {'foo' : ['bar']}, {}, {'cookie' : 'value'});
+        await write(__dirname+'/test-post-http.php.txt', JSON.stringify(response));
+    } catch (error) {
+        console.error(error);
+    }
+
+    try {
+        response = await request('POST', 'fetch', '/test/test.php', {'foo' : ['bar']}, {}, {'cookie' : 'value'});
+        await write(__dirname+'/test-post-fetch.php.txt', JSON.stringify(response));
+    } catch (error) {
+        console.error(error);
+    }
 }
 
 test().then(() => 1).catch((error) => console.error(error));

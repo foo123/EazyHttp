@@ -1,5 +1,5 @@
 <?php
-// run "php -S localhost:9000 server.php"
+// run "php -S localhost:9000 test-server.php"
 set_time_limit(0);
 $method = isset($_SERVER['REQUEST_METHOD']) ? strtoupper((string)$_SERVER['REQUEST_METHOD']) : 'GET';
 

@@ -41,7 +41,7 @@ $response = $http->option(
     'https://example.com/',
     ['foo' => 'bar'], // custom URL params
     ['User-Agent' => 'EazyHttp'], // custom Headers
-    [['name' => 'a_cookie', 'value' => 'some cookie value']] // custom Cookies
+    ['a_cookie' => 'some cookie value'] // custom Cookies
 );
 
 // HTTP POST request
@@ -55,7 +55,7 @@ $response = $http->option(
     'https://example.com/',
     ['foo' => 'bar'], // custom post data
     ['User-Agent' => 'EazyHttp'], // custom Headers
-    [['name' => 'a_cookie', 'value' => 'some cookie value']] // custom Cookies
+    ['a_cookie' => 'some cookie value'] // custom Cookies
 );
 
 echo json_encode($response); // stdClass: {status}, {content}, {headers}, {cookies}
@@ -78,7 +78,7 @@ http.option(
     'https://example.com/',
     {'foo' : 'bar'}, // custom URL params
     {'User-Agent' : 'EazyHttp'}, // custom Headers
-    [{'name' : 'a_cookie', 'value' : 'some cookie value'}] // custom Cookies
+    {'a_cookie' : 'some cookie value'} // custom Cookies
 ).then(
     (response)  => console.log(JSON.stringify(response)) // Object: {status}, {content}, {headers}, {cookies}
 );
@@ -96,7 +96,7 @@ http.option(
     'https://example.com/',
     {'foo' : 'bar'}, // custom post data
     {'User-Agent' : 'EazyHttp'}, // custom Headers
-    [{'name' : 'a_cookie', 'value' : 'some cookie value'}] // custom Cookies
+    {'a_cookie' : 'some cookie value'} // custom Cookies
 ).then(
     (response)  => console.log(JSON.stringify(response)) // Object: {status}, {content}, {headers}, {cookies}
 );
