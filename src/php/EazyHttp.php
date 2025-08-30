@@ -230,19 +230,24 @@ class EazyHttp
         // setup
         $requestHeaders = $this->format_http_cookies($cookies, $this->format_http_header($headers, array()));
         $responseHeader = array();
-        curl_setopt($curl, CURLOPT_RETURNTRANSFER,  true);
-        curl_setopt($curl, CURLOPT_FOLLOWLOCATION,  0 < intval($this->option('follow_redirects')));
-        curl_setopt($curl, CURLOPT_MAXREDIRS,       intval($this->option('follow_redirects')));
-        curl_setopt($curl, CURLOPT_TIMEOUT,         intval($this->option('timeout'))); // sec
-        curl_setopt($curl, CURLOPT_HEADERFUNCTION,  function($curl, $header) use (&$responseHeader) {
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER,          true);
+        curl_setopt($curl, CURLOPT_FOLLOWLOCATION,          0 < intval($this->option('follow_redirects')));
+        curl_setopt($curl, CURLOPT_MAXREDIRS,               intval($this->option('follow_redirects')));
+        curl_setopt($curl, CURLOPT_CONNECTTIMEOUT,          intval($this->option('timeout'))); // sec
+        curl_setopt($curl, CURLOPT_TIMEOUT,                 intval($this->option('timeout'))); // sec
+        curl_setopt($curl, CURLOPT_HTTP_TRANSFER_DECODING,  1); // default
+        curl_setopt($curl, CURLOPT_HEADERFUNCTION,          function($curl, $header) use (&$responseHeader) {
             $responseHeader[] = trim($header);
             return strlen($header);
         });
-        curl_setopt($curl, CURLOPT_HTTPHEADER,      $requestHeaders);
+        // sets cookies with requestHeaders
+        //curl_setopt($curl, CURLOPT_COOKIE,                $headers['Cookie']);
+        curl_setopt($curl, CURLOPT_HTTPHEADER,              $requestHeaders);
 
-        if ('POST' === $method || 'PUT' === $method || 'PATCH' === $method)
+        if ('POST' === $method || 'PUT' === $method || 'PATCH' === $method || 'DELETE' === $method || 'HEAD' === $method)
         {
             if ('POST' === $method) curl_setopt($curl, CURLOPT_POST, true);
+            //else if ('PUT' === $method) curl_setopt($curl, CURLOPT_PUT, true); // deprecated
             else curl_setopt($curl, CURLOPT_CUSTOMREQUEST, $method);
             curl_setopt($curl, CURLOPT_POSTFIELDS, $requestBody);
         }
@@ -293,7 +298,7 @@ class EazyHttp
                 'follow_location'   => 0 < intval($this->option('follow_redirects')),
                 'max_redirects'     => intval($this->option('follow_redirects')) + 1,
                 'timeout'           => floatval($this->option('timeout')), // sec
-                'ignore_errors'     => false,
+                'ignore_errors'     => false // default
             ),
         ));
 

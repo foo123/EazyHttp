@@ -218,7 +218,7 @@ EazyHttp[PROTO] = {
             return_type = String(self.option('return_type')).toLowerCase();
 
         // node
-        do_request = function(uri, redirect, protocol0, host0, port0, path0, received_headers0) {
+        do_request = function(uri, redirect, protocol0, host0, port0, path0, headers0) {
             var request = null, error = null, opts,
                 parts, protocol, host, port, path;
             if (redirect > follow_redirects)
@@ -267,7 +267,7 @@ EazyHttp[PROTO] = {
 
                 if (!is_same_origin(host, host0, port, port0, protocol, protocol0))
                 {
-                    received_headers0 = null;
+                    headers0 = null;
                     cookies = {};
                     //if (HAS.call(headers, 'Cookie')) delete headers['Cookie'];
                     if (HAS.call(headers, 'Authorization')) delete headers['Authorization'];
@@ -306,7 +306,15 @@ EazyHttp[PROTO] = {
                         request.destroy();
                         //cookies = merge_cookies(cookies, received_cookies);
                         cookies = {}; // do not send any cookies
-                        do_request(m[1], redirect+1, protocol, host, port, path0, extend(is_obj(received_headers0) ? received_headers0 : {}, parse_http_header(response.headers)));
+                        do_request(
+                            m[1],
+                            redirect+1,
+                            protocol,
+                            host,
+                            port,
+                            path0//,
+                            //extend(is_obj(headers0) ? headers0 : {}, parse_http_header(response.headers))
+                        );
                     }
                     else
                     {
@@ -365,7 +373,7 @@ EazyHttp[PROTO] = {
             return_type = String(self.option('return_type')).toLowerCase();
 
         // browser and node
-        do_request = function(uri, redirect, protocol0, host0, port0, received_headers0) {
+        do_request = function(uri, redirect, protocol0, host0, port0, headers0) {
             var request = null, error = null, done = false,
                 on_timeout = null, abort_on_timeout = null,
                 parts, protocol, host, port, opts;
@@ -397,7 +405,7 @@ EazyHttp[PROTO] = {
 
                 if (!is_same_origin(host, host0, port, port0, protocol, protocol0))
                 {
-                    received_headers0 = null;
+                    headers0 = null;
                     cookies = {};
                     //if (HAS.call(headers, 'Cookie')) delete headers['Cookie'];
                     if (HAS.call(headers, 'Authorization')) delete headers['Authorization'];
@@ -449,7 +457,14 @@ EazyHttp[PROTO] = {
                         p = parse_url(request.url);
                         //cookies = merge_cookies(cookies, received_cookies);
                         cookies = {}; // do not send any cookies, on browser they are sent
-                        do_request(/*m[1]* /response.url, redirect+1, p['scheme'], p['host'], p['port'],  extend(is_obj(received_headers0) ? received_headers0 : {}, parse_http_header(response.headers)));
+                        do_request(
+                            /*m[1]* /response.url,
+                            redirect+1,
+                            p['scheme'],
+                            p['host'],
+                            p['port']//,
+                            //extend(is_obj(headers0) ? headers0 : {}, parse_http_header(response.headers))
+                        );
                     }
                     else
                     {*/
