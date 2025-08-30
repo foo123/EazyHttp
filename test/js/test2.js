@@ -8,7 +8,7 @@ function test()
     function request(do_http, uri)
     {
         // returns Promise
-        return (new EazyHttp()).option('methods', [do_http]).get('https://github.com/foo123/EazyHttp');
+        return (new EazyHttp()).option('methods', [do_http]).get(uri);
     }
     function write(file, content)
     {
