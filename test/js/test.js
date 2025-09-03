@@ -47,7 +47,7 @@ async function test()
 
     try {
         response = await request('GET', 'fetch', '/test/test.jpg', null, null, null, 'buffer');
-        await write(__dirname+'/test-fetch.jpg', Buffer.from(response.content));
+        await write(__dirname+'/test-fetch.jpg', response.content);
     } catch (error) {
         console.error(error);
     }

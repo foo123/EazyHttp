@@ -474,7 +474,7 @@ EazyHttp[PROTO] = {
                         body.then(function(content) {
                             cb(null, {
                                 status  : status,
-                                content : content,
+                                content : ('buffer' === return_type) && isNode ? Buffer.from(content) : content,
                                 headers : received_headers,
                                 cookies : received_cookies
                             });

@@ -34,7 +34,7 @@ $http = new EazyHttp();
 
 // HTTP GET request
 $response = $http->option(
-    'timeout',             30/*secs*/ // default
+    'timeout',             30 // secs, default
 )->option(
     'follow_redirects',    3 // default
 )->option(
@@ -48,7 +48,7 @@ $response = $http->option(
 
 // HTTP POST request
 $response = $http->option(
-    'timeout',             30/*secs*/ // default
+    'timeout',             30 // secs, default
 )->option(
     'follow_redirects',    3 // default
 )->option(
@@ -69,7 +69,7 @@ const http = new EazyHttp();
 
 // HTTP GET request
 http.option(
-    'timeout',              30/*secs*/ // default
+    'timeout',             30 // secs, default
 ).option(
     'follow_redirects',     3 // default
 ).option(
@@ -87,7 +87,7 @@ http.option(
 
 // HTTP POST request
 http.option(
-    'timeout',              30/*secs*/ // default
+    'timeout',             30 // secs, default
 ).option(
     'follow_redirects',     3 // default
 ).option(
