@@ -5,7 +5,7 @@ EazyHttp, easy, simple and fast HTTP requests for PHP, JavaScript, Python
 
 ![EazyHttp](/eazyhttp.jpg)
 
-version **1.0.0**
+version **1.0.1**
 
 **supports**
 
@@ -21,10 +21,14 @@ version **1.0.0**
 * `XMLHttpRequest` (if available)
 * `iframe` (if available)
 
-**JavaScript/Node**
+**JavaScript/Node (in any desired order)**
 
 * `http`/`https` (if available)
 * `fetch` (if available)
+
+**JavaScript/XPCOM**
+
+* `XMLHttpRequest` (if available)
 
 **example**
 
@@ -114,10 +118,12 @@ http.option(
 * [PublishSubscribe](https://github.com/foo123/PublishSubscribe) a simple and flexible publish-subscribe pattern implementation for PHP, JavaScript, Python
 * [Localizer](https://github.com/foo123/Localizer) a simple and versatile localization class (l10n) for PHP, JavaScript, Python
 * [Importer](https://github.com/foo123/Importer) simple class &amp; dependency manager and loader for PHP, JavaScript, Python
-* [EazyHttp](https://github.com/foo123/EazyHttp), easy, simple and fast HTTP requests for PHP, JavaScript, Python
+* [EazyHttp](https://github.com/foo123/EazyHttp) easy, simple and fast HTTP requests for PHP, JavaScript, Python
+* [RT](https://github.com/foo123/RT) a versatile real-time communication client for JavaScript supporting Polling / BOSH / WebSockets / WebRTC
+* [AjaxListener.js](https://github.com/foo123/AjaxListener.js) a listener for any AJAX event for JavaScript, even by other scripts
 * [Contemplate](https://github.com/foo123/Contemplate) a fast and versatile isomorphic template engine for PHP, JavaScript, Python
 * [HtmlWidget](https://github.com/foo123/HtmlWidget) html widgets, made as simple as possible, both client and server, both desktop and mobile, can be used as (template) plugins and/or standalone for PHP, JavaScript, Python (can be used as [plugins for Contemplate](https://github.com/foo123/Contemplate/blob/master/src/js/plugins/plugins.txt))
-* [Paginator](https://github.com/foo123/Paginator)  simple and flexible pagination controls generator for PHP, JavaScript, Python
+* [Paginator](https://github.com/foo123/Paginator) simple and flexible pagination controls generator for PHP, JavaScript, Python
 * [Formal](https://github.com/foo123/Formal) a simple and versatile (Form) Data validation framework based on Rules for PHP, JavaScript, Python
 * [Dialect](https://github.com/foo123/Dialect) a cross-vendor &amp; cross-platform SQL Query Builder, based on [GrammarTemplate](https://github.com/foo123/GrammarTemplate), for PHP, JavaScript, Python
 * [DialectORM](https://github.com/foo123/DialectORM) an Object-Relational-Mapper (ORM) and Object-Document-Mapper (ODM), based on [Dialect](https://github.com/foo123/Dialect), for PHP, JavaScript, Python

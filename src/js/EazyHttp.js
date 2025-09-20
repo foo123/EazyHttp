@@ -1,31 +1,34 @@
 /**
 *   EazyHttp
 *   easy, simple and fast HTTP requests for PHP, JavaScript, Python
-*   @version: 1.0.0
+*   @version: 1.0.1
 *
 *   https://github.com/foo123/EazyHttp
 **/
 !function(root, name, factory) {
 "use strict";
 var m;
-if (('object' === typeof module) && module.exports) /* CommonJS */
+if (('undefined' !== typeof Components) && ('object' === typeof Components.classes) && ('object' === typeof Components.classesByID) && Components.utils && ('function' === typeof Components.utils['import'])) /* XPCOM */
+    (root.EXPORTED_SYMBOLS = [name]) && (root[name] = factory.call(root));
+else if (('object' === typeof module) && module.exports) /* CommonJS */
     module.exports = factory.call(root);
 else if (('function' === typeof(define)) && define.amd && ('function' === typeof(require)) && ('function' === typeof(require.specified)) && require.specified(name)) /* AMD */
-    define(name,['require','exports','module'],function() {return factory.call(root);});
+    define(name,['require','exports','module'], function() {return factory.call(root);});
 else if (!(name in root)) /* Browser/WebWorker/.. */
     (root[name] = (m=factory.call(root))) && ('function' === typeof(define)) && define.amd && define(function() {return m;});
 }(/* current root */          'undefined' !== typeof self ? self : this,
   /* module name */           "EazyHttp",
-  /* module factory */        function(undef) {
+  /* module factory */        function ModuleFactory__EazyHttp(undef) {
 "use strict";
 
-var VERSION = '1.0.0',
+var VERSION = '1.0.1',
 
     PROTO = 'prototype',
     HAS = Object[PROTO].hasOwnProperty,
     toString = Object[PROTO].toString,
 
-    isNode = ('undefined' !== typeof(global)) && ('[object global]' === toString.call(global)),
+    isNode = ('undefined' !== typeof global) && ('[object global]' === toString.call(global)),
+    isXPCOM = ('undefined' !== typeof Components) && ('object' === typeof Components.classes) && ('object' === typeof Components.classesByID) && Components.utils && ('function' === typeof Components.utils['import']),
 
     ID = 0
 ;
@@ -162,8 +165,9 @@ EazyHttp[PROTO] = {
                     ('xhr' === send_method)
                     && !isNode
                     && (
-                        ('undefined' !== typeof(XMLHttpRequest))
-                        || ('undefined' !== typeof(ActiveXObject))
+                        isXPCOM
+                        || ('undefined' !== typeof XMLHttpRequest)
+                        || ('undefined' !== typeof ActiveXObject)
                     )
                 )
                 {
@@ -517,22 +521,38 @@ EazyHttp[PROTO] = {
         var self = this, xhr = null, error = null,
             timeout = parseInt(self.option('timeout')),
             follow_redirects = parseInt(self.option('follow_redirects')),
-            return_type = String(self.option('return_type')).toLowerCase();
+            return_type = String(self.option('return_type')).toLowerCase(),
+            ontimeout, onerror, onload;
 
-        // browser
-        try {
-            xhr = 'undefined' !== typeof(XMLHttpRequest) ? (new XMLHttpRequest()) : (new ActiveXObject('Microsoft.XMLHTTP'));
-        } catch (e) {
-            xhr = null;
-            error = e;
+        if (isXPCOM)
+        {
+            // Firefox XPCOM
+            try {
+                xhr = Components.classes["@mozilla.org/xmlextras/xmlhttprequest;1"].createInstance();
+            } catch (e) {
+                xhr = null;
+                error = e;
+            }
+        }
+        else
+        {
+            // browser
+            try {
+                xhr = 'undefined' !== typeof XMLHttpRequest ? (new XMLHttpRequest()) : (new ActiveXObject('Microsoft.XMLHTTP'));
+            } catch (e) {
+                xhr = null;
+                error = e;
+            }
         }
         if (xhr)
         {
             //xhr.onreadystatechange
+            // (0 /*UNSENT*/ === xhr.readyState)
+            // (1 /*OPENED*/ === xhr.readyState)
             // (2 /*HEADERS_RECEIVED*/ === xhr.readyState)
             // (3 /*LOADING*/ === xhr.readyState)
             // (4 /*DONE*/ === xhr.readyState)
-            xhr.ontimeout = function() {
+            ontimeout = function() {
                 cb(new EazyHttpException('Request timeout after ' + timeout + ' seconds'), {
                     status  : 0,
                     content : false,
@@ -540,7 +560,7 @@ EazyHttp[PROTO] = {
                     cookies : {}
                 });
             };
-            xhr.onerror = function() {
+            onerror = function() {
                 cb(new EazyHttpException('Request error'), {
                     status  : 0,
                     content : false,
@@ -548,7 +568,7 @@ EazyHttp[PROTO] = {
                     cookies : {}
                 });
             };
-            xhr.onload = function() {
+            onload = function() {
                 if (4/*DONE*/ === xhr.readyState)
                 {
                     var status = +xhr.status,
@@ -572,6 +592,18 @@ EazyHttp[PROTO] = {
                     });
                 }
             };
+            if ('function' === typeof xhr.addEventListener)
+            {
+                xhr.addEventListener('timeout', ontimeout);
+                xhr.addEventListener('error', onerror);
+                xhr.addEventListener('load', onload);
+            }
+            else
+            {
+                xhr.ontimeout = ontimeout;
+                xhr.onerror = onerror;
+                xhr.onload = onload;
+            }
             xhr.responseType = 'buffer' === return_type ? 'arraybuffer' : 'text';
             xhr.timeout = 1000*timeout; // ms
             xhr.open(method, uri, true/*, user, pass*/);  // 'true' makes the request asynchronous
@@ -1023,7 +1055,7 @@ function parse_http_header(responseHeader)
         multiple_headers = ['set-cookie'],
         lines, parts, line, i, n;
     // return lowercase headers as in spec
-    if ('undefined' !== typeof(Headers) && (responseHeader instanceof Headers))
+    if (('undefined' !== typeof Headers) && (responseHeader instanceof Headers))
     {
         responseHeader.forEach(function(value, name) {
             name = /*ucwords(*/trim(name).toLowerCase()/*, '-')*/;
