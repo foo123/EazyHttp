@@ -5,7 +5,7 @@ EazyHttp, easy, simple and fast HTTP requests for PHP, JavaScript, Python
 
 ![EazyHttp](/eazyhttp.jpg)
 
-version **1.0.1**
+version **1.1.0**
 
 **supports**
 
@@ -29,6 +29,11 @@ version **1.0.1**
 **JavaScript/XPCOM**
 
 * `XMLHttpRequest` (if available)
+
+**Python (in any desired order)**
+
+* `urllib`
+* `socket` (incomplete)
 
 **example**
 
@@ -106,6 +111,42 @@ http.option(
 ).then(
     (response)  => console.log(JSON.stringify(response)) // Object: {status}, {content}, {headers}, {cookies}
 );
+```
+
+**Python**
+```php
+http = EazyHttp()
+
+# HTTP GET request
+response = http.option(
+    'timeout',             30 # secs, default
+).option(
+    'follow_redirects',    3 # default
+).option(
+    'methods',             ['urllib', 'socket'] # default order
+).get(
+    'https://example.com/',
+    {'foo' : 'bar'}, # custom URL params
+    {'User-Agent' : 'EazyHttp'}, # custom Headers
+    {'a_cookie' : 'some cookie value'} # custom Cookies
+)
+
+# HTTP POST request
+response = http.option(
+    'timeout',             30 # secs, default
+).option(
+    'follow_redirects',    3 # default
+).option(
+    'methods',             ['urllib', 'socket'] # default order
+).post(
+    'https://example.com/',
+    {'foo' : 'bar'}, # custom post data
+    {'User-Agent' : 'EazyHttp'}, # custom Headers
+    {'a_cookie' : 'some cookie value'} # custom Cookies
+)
+
+import json
+print(json.dumps(response)) # dict: {status}, {content}, {headers}, {cookies}
 ```
 
 **see also:**

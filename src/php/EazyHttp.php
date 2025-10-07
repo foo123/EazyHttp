@@ -2,7 +2,7 @@
 /**
 *   EazyHttp
 *   easy, simple and fast HTTP requests for PHP, JavaScript, Python
-*   @version: 1.0.1
+*   @version: 1.1.0
 *
 *   https://github.com/foo123/EazyHttp
 **/
@@ -10,7 +10,7 @@ if (!class_exists('EazyHttp', false))
 {
 class EazyHttp
 {
-    const VERSION = '1.0.1';
+    const VERSION = '1.1.0';
 
     protected $opts = array();
 
@@ -135,12 +135,11 @@ class EazyHttp
             {
                 if (empty($headers)) $headers = array();
                 $array = array_merge(array(), (array)$headers);
-                $headers = array();
+                $headers = array('User-Agent' => 'EazyHttp', 'Accept' => '*/*');
                 foreach ($array as $name => $value)
                 {
                     $headers[ucwords(strtolower(trim($name)), '-')] = $value;
                 }
-                $headers = array_merge(array('User-Agent' => 'EazyHttp', 'Accept' => '*/*'), $headers);
 
                 if (empty($cookies)) $cookies = array();
                 $array = array_merge(array(), (array)$cookies);
@@ -655,14 +654,14 @@ class EazyHttp
         return $responseHeaders;
     }
 
-    protected function parse_http_cookies($setCookies)
+    protected function parse_http_cookies($setCookies, $onlyNameValue = false)
     {
         $cookies = array();
         if (!empty($setCookies))
         {
             foreach ($setCookies as $cookie_str)
             {
-                $cookie = $this->parse_cookie($cookie_str, false);
+                $cookie = $this->parse_cookie($cookie_str, false, $onlyNameValue);
                 if (!empty($cookie)) $cookies[$cookie['name']] = $cookie;
             }
         }
@@ -687,10 +686,23 @@ class EazyHttp
         return $output;
     }
 
-    protected function parse_cookie($str, $isRaw = false)
+    protected function parse_cookie($s, $isRaw = false, $onlyNameValue = false)
     {
+        $cookie = array();
+        $parts = explode(';', strval($s));
+        foreach ($parts as $i => $part) $parts[$i] = explode('=', $part, 2);
+
+        $part = array_shift($parts);
+        $name = !$isRaw ? urldecode(trim($part[0])) : trim($part[0]);
+        $value = isset($part[1]) ? (!$isRaw ? urldecode(trim($part[1])) : trim($part[1])) : null;
+        $cookie['name'] = $name;
+        $cookie['value'] = $value;
+        if ($onlyNameValue) return $cookie;
+
         $cookie = array(
             'isRaw'         => $isRaw,
+            'name'          => $cookie['name'],
+            'value'         => $cookie['value'],
             'expires'       => 0,
             'path'          => '/',
             'domain'        => null,
@@ -699,24 +711,12 @@ class EazyHttp
             'samesite'      => null,
             'partitioned'   => false,
         );
-
-        $parts = explode(';', strval($str));
-        foreach ($parts as $i => $part) $parts[$i] = explode('=', $part, 2);
-
-        $part = array_shift($parts);
-        $name = !$isRaw ? urldecode(trim($part[0])) : trim($part[0]);
-        $value = isset($part[1]) ? (!$isRaw ? urldecode(trim($part[1])) : trim($part[1])) : null;
-        $cookie['name'] = $name;
-        $cookie['value'] = $value;
-
-        $data = array();
         foreach ($parts as $part)
         {
             $name = strtolower(trim($part[0]));
             $value = isset($part[1]) ? trim($part[1]) : true;
-            $data[$name] = $value;
+            $cookie[$name] = $value;
         }
-        $cookie = array_merge($cookie, $data);
 
         if (!is_numeric($cookie['expires']))
         {
@@ -746,24 +746,24 @@ class EazyHttp
 
         $isRaw = !empty($cookie['isRaw']);
 
-        $str = '';
+        $s = '';
 
         if ($isRaw)
         {
-            $str = strval($cookie['name']);
+            $s = strval($cookie['name']);
         }
         else
         {
-            $str = str_replace($RESERVED_CHARS_FROM, $RESERVED_CHARS_TO, strval($cookie['name']));
+            $s = str_replace($RESERVED_CHARS_FROM, $RESERVED_CHARS_TO, strval($cookie['name']));
         }
 
-        $str .= '=';
+        $s .= '=';
 
         if ('' === (string) $cookie['value'])
         {
             if ($toSet)
             {
-                $str .= 'deleted; Expires=' . gmdate('D, d M Y H:i:s T', time() - 31536001).'; Max-Age=0';
+                $s .= 'deleted; Expires=' . gmdate('D, d M Y H:i:s T', time() - 31536001) . '; Max-Age=0';
             }
             else
             {
@@ -772,14 +772,14 @@ class EazyHttp
         }
         else
         {
-            $str .= $isRaw ? strval($cookie['value']) : rawurlencode(strval($cookie['value']));
+            $s .= $isRaw ? strval($cookie['value']) : rawurlencode(strval($cookie['value']));
 
             $expires = isset($cookie['expires']) ? (intval($cookie['expires'])||0) : (time() + 60);
             $maxAge = max(0, $expires-time());
 
             if ($toSet)
             {
-                $str .= '; Expires=' . gmdate('D, d M Y H:i:s T', $expires) . '; Max-Age=' . $maxAge;
+                $s .= '; Expires=' . gmdate('D, d M Y H:i:s T', $expires) . '; Max-Age=' . $maxAge;
             }
             elseif (!$maxAge)
             {
@@ -791,36 +791,36 @@ class EazyHttp
         {
             if (isset($cookie['path']))
             {
-                $str .= '; Path=' . $cookie['path'];
+                $s .= '; Path=' . $cookie['path'];
             }
 
             if (isset($cookie['domain']))
             {
-                $str .= '; Domain=' . $cookie['domain'];
+                $s .= '; Domain=' . $cookie['domain'];
             }
 
             if (!empty($cookie['secure']))
             {
-                $str .= '; Secure';
+                $s .= '; Secure';
             }
 
             if (!empty($cookie['httponly']))
             {
-                $str .= '; HttpOnly';
+                $s .= '; HttpOnly';
             }
 
             if (isset($cookie['samesite']))
             {
-                $str .= '; SameSite=' . $cookie['samesite'];
+                $s .= '; SameSite=' . $cookie['samesite'];
             }
 
             if (!empty($cookie['partitioned']))
             {
-                $str .= '; Partitioned';
+                $s .= '; Partitioned';
             }
         }
 
-        return $str;
+        return $s;
     }
 
     protected function parse_chunked($chunked)

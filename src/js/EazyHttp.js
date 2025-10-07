@@ -1,7 +1,7 @@
 /**
 *   EazyHttp
 *   easy, simple and fast HTTP requests for PHP, JavaScript, Python
-*   @version: 1.0.1
+*   @version: 1.1.0
 *
 *   https://github.com/foo123/EazyHttp
 **/
@@ -21,7 +21,7 @@ else if (!(name in root)) /* Browser/WebWorker/.. */
   /* module factory */        function ModuleFactory__EazyHttp(undef) {
 "use strict";
 
-var VERSION = '1.0.1',
+var VERSION = '1.1.0',
 
     PROTO = 'prototype',
     HAS = Object[PROTO].hasOwnProperty,
@@ -111,7 +111,7 @@ EazyHttp[PROTO] = {
         if (!cookies || !is_obj(cookies)) cookies = {};
 
         o = headers;
-        headers = {};
+        headers = {'User-Agent': 'EazyHttp', 'Accept': '*/*'};
         for (name in o)
         {
             if (HAS.call(o, name))
@@ -119,7 +119,6 @@ EazyHttp[PROTO] = {
                 headers[ucwords(trim(name).toLowerCase())] = o[name];
             }
         }
-        headers = extend({'User-Agent': 'EazyHttp', 'Accept': '*/*'}, headers);
 
         o = cookies;
         cookies = {};
@@ -220,6 +219,7 @@ EazyHttp[PROTO] = {
             timeout = parseInt(self.option('timeout')),
             follow_redirects = parseInt(self.option('follow_redirects')),
             return_type = String(self.option('return_type')).toLowerCase();
+        if ('bytes' === return_type) return_type = 'buffer'; // alias
 
         // node
         do_request = function(uri, redirect, protocol0, host0, port0, path0, headers0) {
@@ -375,6 +375,7 @@ EazyHttp[PROTO] = {
             timeout = parseInt(self.option('timeout')),
             follow_redirects = parseInt(self.option('follow_redirects')),
             return_type = String(self.option('return_type')).toLowerCase();
+        if ('bytes' === return_type) return_type = 'buffer'; // alias
 
         // browser and node
         do_request = function(uri, redirect, protocol0, host0, port0, headers0) {
@@ -524,6 +525,7 @@ EazyHttp[PROTO] = {
             return_type = String(self.option('return_type')).toLowerCase(),
             ontimeout, onerror, onload;
 
+        if ('bytes' === return_type) return_type = 'buffer'; // alias
         if (isXPCOM)
         {
             // Firefox XPCOM
@@ -639,6 +641,7 @@ EazyHttp[PROTO] = {
             return_type = String(self.option('return_type')).toLowerCase(),
             on_timeout = null, finish = null, done = false;
 
+        if ('bytes' === return_type) return_type = 'buffer'; // alias
         // browser
         try {
             form = document.createElement('form');
@@ -1160,12 +1163,12 @@ function format_http_cookies(cookies, headers)
     }
     return headers;
 }
-function parse_cookie(str, isRaw, onlyNameValue)
+function parse_cookie(s, isRaw, onlyNameValue)
 {
-    var cookie, parts, part, i, n, name, value, data;
+    var cookie, parts, part, i, n, name, value, expires;
     cookie = {};
 
-    parts = String(str).split(';');
+    parts = String(s).split(';');
     for (i=0,n=parts.length; i<n; ++i) parts[i] = parts[i].split('=', 2);
 
     part = parts.shift();
@@ -1175,8 +1178,10 @@ function parse_cookie(str, isRaw, onlyNameValue)
     cookie['value'] = value;
     if (onlyNameValue) return cookie;
 
-    data = {
+    cookie = {
         'isRaw' : isRaw,
+        'name' : cookie['name'],
+        'value' : cookie['value'],
         'expires' : 0,
         'path' : '/',
         'domain' : null,
@@ -1190,15 +1195,15 @@ function parse_cookie(str, isRaw, onlyNameValue)
         part = parts[i];
         name = trim(part[0]).toLowerCase();
         value = (null != part[1]) ? trim(part[1]) : true;
-        data[name] = value;
+        cookie[name] = value;
     }
-    cookie = extend(cookie, data);
 
-    cookie['expires'] = new Date(/^[0-9]+$/.test(cookie['expires']) ? (1000*parseInt(cookie['expires'])) : cookie['expires']);
+    expires = new Date(/^[0-9]+$/.test(cookie['expires']) ? (1000*parseInt(cookie['expires'])) : cookie['expires']);
+    cookie['expires'] = expires.toUTCString();
 
-    if ((null != cookie['max-age']) && ((+cookie['max-age']) > 0 || cookie['expires'].getTime() > Date.now()))
+    if ((null != cookie['max-age']) && ((+cookie['max-age']) > 0 || expires.getTime() > Date.now()))
     {
-        cookie['expires'] = new Date(Date.now() + 1000*parseInt(cookie['max-age']));
+        cookie['expires'] = (new Date(Date.now() + 1000*parseInt(cookie['max-age']))).toUTCString();
     }
 
     return cookie;
@@ -1208,7 +1213,7 @@ function format_cookie(cookie, toSet)
     var RESERVED_CHARS_LIST = "=,; \t\r\n\v\f",
         RESERVED_CHARS_FROM = ['=', ',', ';', ' ', "\t", "\r", "\n", "\v", "\f"],
         RESERVED_CHARS_TO = ['%3D', '%2C', '%3B', '%20', '%09', '%0D', '%0A', '%0B', '%0C'],
-        isRaw, str, expires, maxAge;
+        isRaw, s, expires, maxAge;
 
     if ((null == cookie) || !is_obj(cookie)) return '';
 
@@ -1216,24 +1221,24 @@ function format_cookie(cookie, toSet)
 
     isRaw = (true === cookie['isRaw']);
 
-    str = '';
+    s = '';
 
     if (isRaw)
     {
-        str = String(cookie['name']);
+        s = String(cookie['name']);
     }
     else
     {
-        str = str_replace(RESERVED_CHARS_FROM, RESERVED_CHARS_TO, String(cookie['name']));
+        s = str_replace(RESERVED_CHARS_FROM, RESERVED_CHARS_TO, String(cookie['name']));
     }
 
-    str += '=';
+    s += '=';
 
     if ((null == cookie['value']) || !String(cookie['value']).length)
     {
         if (toSet)
         {
-            str += 'deleted; Expires=' + (new Date(Date.now() - 1000*31536001)).toUTCString()+'; Max-Age=0';
+            s += 'deleted; Expires=' + (new Date(Date.now() - 1000*31536001)).toUTCString() + '; Max-Age=0';
         }
         else
         {
@@ -1242,7 +1247,7 @@ function format_cookie(cookie, toSet)
     }
     else
     {
-        str += isRaw ? String(cookie['value']) : rawurlencode(String(cookie['value']));
+        s += isRaw ? String(cookie['value']) : rawurlencode(String(cookie['value']));
 
         if (is_number(cookie['expires'])) cookie['expires'] = new Date(1000*cookie['expires']);
         expires = null != cookie['expires'] ? cookie['expires'] : (new Date(Date.now() + 1000*60));
@@ -1251,7 +1256,7 @@ function format_cookie(cookie, toSet)
 
         if (toSet)
         {
-            str += '; Expires=' + expires.toUTCString() + '; Max-Age=' + maxAge;
+            s += '; Expires=' + expires.toUTCString() + '; Max-Age=' + maxAge;
         }
         else if (!maxAge)
         {
@@ -1263,36 +1268,36 @@ function format_cookie(cookie, toSet)
     {
         if ((null != cookie['path']))
         {
-            str += '; Path=' + cookie['path'];
+            s += '; Path=' + cookie['path'];
         }
 
         if ((null != cookie['domain']))
         {
-            str += '; Domain=' + cookie['domain'];
+            s += '; Domain=' + cookie['domain'];
         }
 
         if (cookie['secure'])
         {
-            str += '; Secure';
+            s += '; Secure';
         }
 
         if (cookie['httponly'])
         {
-            str += '; HttpOnly';
+            s += '; HttpOnly';
         }
 
         if ((null != cookie['samesite']))
         {
-            str += '; SameSite=' + cookie['samesite'];
+            s += '; SameSite=' + cookie['samesite'];
         }
 
         if (cookie['partitioned'])
         {
-            str += '; Partitioned';
+            s += '; Partitioned';
         }
     }
 
-    return str;
+    return s;
 }
 function is_string(x)
 {
