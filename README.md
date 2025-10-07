@@ -114,7 +114,7 @@ http.option(
 ```
 
 **Python**
-```php
+```python
 http = EazyHttp()
 
 # HTTP GET request
