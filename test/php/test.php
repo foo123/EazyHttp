@@ -1,5 +1,5 @@
 <?php
-// run "php -S localhost:9000 test-server.php"
+// run "php -S 127.0.0.1:9000 test-server.php"
 
 include(dirname(__FILE__) . '/../../src/php/EazyHttp.php');
 
@@ -9,7 +9,7 @@ function request($do_http, $method, $uri, $data = null, $headers = null, $cookie
         ->option('methods',     [$do_http])
         ->option('return_type', $return_type)
     ;
-    return 'POST' === $method ? $http->post('http://localhost:9000' . $uri, $data, $headers, $cookies) : $http->get('http://localhost:9000' . $uri, $data, $headers, $cookies);
+    return 'POST' === $method ? $http->post('http://127.0.0.1:9000' . $uri, $data, $headers, $cookies) : $http->get('http://127.0.0.1:9000' . $uri, $data, $headers, $cookies);
 }
 function test()
 {

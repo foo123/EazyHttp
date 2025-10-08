@@ -1,7 +1,7 @@
 /**
 *   EazyHttp
 *   easy, simple and fast HTTP requests for PHP, JavaScript, Python
-*   @version: 1.1.0
+*   @version: 1.2.0
 *
 *   https://github.com/foo123/EazyHttp
 **/
@@ -21,7 +21,7 @@ else if (!(name in root)) /* Browser/WebWorker/.. */
   /* module factory */        function ModuleFactory__EazyHttp(undef) {
 "use strict";
 
-var VERSION = '1.1.0',
+var VERSION = '1.2.0',
 
     PROTO = 'prototype',
     HAS = Object[PROTO].hasOwnProperty,

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# run "php -S 127.0.0.1:9000 test-server.php"
 import os, sys
 
 DIR = os.path.dirname(os.path.abspath(__file__))
@@ -41,33 +42,57 @@ def request(do_http, method, uri, data = None, headers = None, cookies = None, r
         .option('methods',     [do_http])
         .option('return_type', return_type)
     )
-    return http.post('http://localhost:9000' + uri, data, headers, cookies) if 'POST' == method else http.get('http://localhost:9000' + uri, data, headers, cookies)
+    return http.post('http://127.0.0.1:9000' + uri, data, headers, cookies) if 'POST' == method else http.get('http://127.0.0.1:9000' + uri, data, headers, cookies)
 
 def test():
     import json
 
-    response = request('urllib', 'GET', '/test/test.txt')
-    file_put_contents(DIR+'/test-urllib.txt', response['content'])
+    try:
+        response = request('urllib', 'GET', '/test/test.txt')
+        file_put_contents(DIR+'/test-urllib.txt', response['content'])
+    except Exception as error:
+        print(str(error))
 
-    response = request('urllib', 'GET', '/test/test.jpg', None, None, None, 'bytes')
-    file_put_contents(DIR+'/test-urllib.jpg', response['content'])
+    try:
+        response = request('socket', 'GET', '/test/test.txt')
+        file_put_contents(DIR+'/test-socket.txt', response['content'])
+    except Exception as error:
+        print(str(error))
 
-    response = request('urllib', 'GET', '/test/test.php', {'foo' : ['bar']}, {}, {'cookie' : 'value'})
-    file_put_contents(DIR+'/test-get-urllib.php.txt', json.dumps(response))
+    try:
+        response = request('urllib', 'GET', '/test/test.jpg', None, None, None, 'bytes')
+        file_put_contents(DIR+'/test-urllib.jpg', response['content'])
+    except Exception as error:
+        print(str(error))
 
-    response = request('urllib', 'POST', '/test/test.php', {'foo' : ['bar']}, {}, {'cookie' : 'value'})
-    file_put_contents(DIR+'/test-post-urllib.php.txt', json.dumps(response))
+    try:
+        response = request('socket', 'GET', '/test/test.jpg', None, None, None, 'bytes')
+        file_put_contents(DIR+'/test-socket.jpg', response['content'])
+    except Exception as error:
+        print(str(error))
 
-    #response = request('socket', 'GET', '/test/test.txt')
-    #file_put_contents(DIR+'/test-socket.txt', response['content'])
-    #
-    #response = request('socket', 'GET', '/test/test.jpg', None, None, None, 'bytes')
-    #file_put_contents(DIR+'/test-socket.jpg', response['content'])
-    #
-    #response = request('socket', 'GET', '/test/test.php', {'foo' : ['bar']}, {}, {'cookie' : 'value'})
-    #file_put_contents(DIR+'/test-get-socket.php.txt', json.dumps(response))
-    #
-    #response = request('socket', 'POST', '/test/test.php', {'foo' : ['bar']}, {}, {'cookie' : 'value'})
-    #file_put_contents(DIR+'/test-post-socket.php.txt', json.dumps(response))
+    try:
+        response = request('urllib', 'GET', '/test/test.php', {'foo' : ['bar']}, {}, {'cookie' : 'value'})
+        file_put_contents(DIR+'/test-get-urllib.php.txt', json.dumps(response))
+    except Exception as error:
+        print(str(error))
+
+    try:
+        response = request('socket', 'GET', '/test/test.php', {'foo' : ['bar']}, {}, {'cookie' : 'value'})
+        file_put_contents(DIR+'/test-get-socket.php.txt', json.dumps(response))
+    except Exception as error:
+        print(str(error))
+
+    try:
+        response = request('urllib', 'POST', '/test/test.php', {'foo' : ['bar']}, {}, {'cookie' : 'value'})
+        file_put_contents(DIR+'/test-post-urllib.php.txt', json.dumps(response))
+    except Exception as error:
+        print(str(error))
+
+    try:
+        response = request('socket', 'POST', '/test/test.php', {'foo' : ['bar']}, {}, {'cookie' : 'value'})
+        file_put_contents(DIR+'/test-post-socket.php.txt', json.dumps(response))
+    except Exception as error:
+        print(str(error))
 
 test()

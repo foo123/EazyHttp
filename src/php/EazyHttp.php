@@ -2,7 +2,7 @@
 /**
 *   EazyHttp
 *   easy, simple and fast HTTP requests for PHP, JavaScript, Python
-*   @version: 1.1.0
+*   @version: 1.2.0
 *
 *   https://github.com/foo123/EazyHttp
 **/
@@ -10,7 +10,7 @@ if (!class_exists('EazyHttp', false))
 {
 class EazyHttp
 {
-    const VERSION = '1.1.0';
+    const VERSION = '1.2.0';
 
     protected $opts = array();
 

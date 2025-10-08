@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# run "php -S 127.0.0.1:9000 test-server.php"
 import os, sys
 
 DIR = os.path.dirname(os.path.abspath(__file__))
@@ -36,15 +37,33 @@ def file_put_contents(path, content):
             file.write(str(content))
 
 def request(do_http, uri, timeout):
-    return EazyHttp().option('methods', [do_http]).option('timeout', timeout).get('http://localhost:9000'  + uri)
+    return EazyHttp().option('methods', [do_http]).option('timeout', timeout).get('http://127.0.0.1:9000'  + uri)
 
 def test():
     import json
 
-    response = request('urllib', '/test/timeout.php?delay=2', 5)
-    file_put_contents(DIR+'/test-timeout-urllib.php.txt', response['content'])
+    try:
+        response = request('urllib', '/test/timeout.php?delay=2', 5)
+        file_put_contents(DIR+'/test-timeout-urllib.php.txt', response['content'])
+    except Exception as error:
+        print(str(error))
 
-    response = request('urllib', '/test/timeout.php?delay=10', 5)
-    file_put_contents(DIR+'/test-timeout-max-urllib.php.txt', json.dumps(response))
+    try:
+        response = request('socket', '/test/timeout.php?delay=2', 5)
+        file_put_contents(DIR+'/test-timeout-socket.php.txt', response['content'])
+    except Exception as error:
+        print(str(error))
+
+    try:
+        response = request('urllib', '/test/timeout.php?delay=10', 5)
+        file_put_contents(DIR+'/test-timeout-max-urllib.php.txt', json.dumps(response))
+    except Exception as error:
+        print(str(error))
+
+    try:
+        response = request('socket', '/test/timeout.php?delay=10', 5)
+        file_put_contents(DIR+'/test-timeout-max-socket.php.txt', json.dumps(response))
+    except Exception as error:
+        print(str(error))
 
 test()

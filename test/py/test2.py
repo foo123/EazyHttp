@@ -40,5 +40,6 @@ def request(do_http, uri):
 
 def test():
     file_put_contents(DIR+'/test2-urllib.py.html', request('urllib', 'https://github.com/foo123/EazyHttp')['content'])
+    file_put_contents(DIR+'/test2-socket.py.html', request('socket', 'https://github.com/foo123/EazyHttp')['content'])
 
 test()

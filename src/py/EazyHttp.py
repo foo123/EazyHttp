@@ -1,19 +1,20 @@
 ##
 #   EazyHttp
 #   easy, simple and fast HTTP requests for PHP, JavaScript, Python
-#   @version: 1.1.0
+#   @version: 1.2.0
 #
 #   https://github.com/foo123/EazyHttp
 ##
 import urllib.request
 import urllib.parse
 import socket
+import ssl
 import re
 import math
 from datetime import datetime, timezone
 
 class EazyHttp:
-    VERSION = "1.1.0"
+    VERSION = "1.2.0"
 
     def __init__(self):
         self.opts = {}
@@ -103,11 +104,11 @@ class EazyHttp:
 
         request = None
         response = None
-        opener = urllib.request.build_opener(EazyHttpRedirectHandler(self.option('follow_redirects')))
+        opener = urllib.request.build_opener(EazyHttpRedirectHandler(int(self.option('follow_redirects'))))
 
         try:
             request = urllib.request.Request(url=uri, data=data, headers=headers, method=method)
-            response = opener.open(request, None, self.option('timeout')) # sec
+            response = opener.open(request, None, int(self.option('timeout'))) # sec
         except Exception as e:
             status = 0
             content = False
@@ -132,80 +133,138 @@ class EazyHttp:
         }
 
     def _do_http_socket(self, method, uri, data, headers, cookies):
-        # TODO, incomplete
-        u = urllib.parse.urlparse(uri)
-        scheme = u.scheme.lower()
-        host = u.hostname
-        port = int(u.port) if u.port is not None else (443 if 'https' == scheme else 80)
-        path = '/' if not u.path else u.path
+        timeout = int(self.option('timeout')) # sec
+        follow_redirects = int(self.option('follow_redirects'))
+        redirect = 0
+        scheme0 = None
+        host0 = None
+        port0 = None
+        path0 = None
+        responseStatus = 0
+        responseBody = b''
+        responseHeaders = {}
+        responseCookies = {}
+        while redirect <= follow_redirects:
+            parts = urllib.parse.urlparse(uri)
+            host = parts.hostname
+            if not host: host = host0
+            if not host:
+                return {
+                    'status' : 0,
+                    'content': False,
+                    'headers': {},
+                    'cookies': {}
+                }
+            scheme = parts.scheme.lower()
+            if not scheme: scheme = scheme0 if scheme0 else 'http'
+            port = int(parts.port) if parts.port else (port0 if port0 else (443 if 'https' == scheme else 80))
+            path = '/' if not parts.path else parts.path
+            path = path_resolve(path, path0)
+            path0 = path
+            if parts.query: path += '?' + parts.query
 
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(self.option('timeout'))  # sec
+            if 0 < redirect:
+                method = 'GET'
+                data = None
 
-        # make request
-        address = (host, port)
+                if 'Content-Type' in headers: del headers['Content-Type']
+                if 'Content-Encoding' in headers: del headers['Content-Encoding']
+                if 'Content-Length' in headers: del headers['Content-Length']
 
-        try:
-            sock.connect(address)
-        except Exception as e:
-            print(str(address))
-            print(str(e))
-            return {
-                'status' : 0,
-                'content': False,
-                'headers': {},
-                'cookies': {}
-            }
+                if not is_same_origin(host, host0, port, port0, scheme, scheme0):
+                    responseHeaders = {}
+                    cookies = {}
+                    if 'Authorization' in headers: del headers['Authorization']
+                    if 'Proxy-Authorization' in headers: del headers['Proxy-Authorization']
+                if 'Referer' in headers: del headers['Referer']
 
-        contentLength = len(data) if data is not None else 0
-        headers['Content-Length'] = contentLength
-        headers['Host'] = host + ('' if ('https' == scheme and 443 == port) or ('http' == scheme and 80 == port) else (':'+str(port)))
-        headers['Connection'] = 'close'
-        if 'Cookie' in headers: del headers['Cookie']
-        requestHeaders = format_http_cookies(cookies, format_http_header(headers, []))
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(timeout)
 
-        # send request
-        request = (method + ' ' + path + ' HTTP/1.1' + "\r\n" + "\r\n".join(requestHeaders) + "\r\n\r\n").encode('ascii')
-        if contentLength: request += data
-        sent = 0
-        total = len(request)
-        while sent < total: sent = sent + sock.send(request[sent:])
+            # make request
+            address = (host, port)
 
-        # receive response
-        response = b''
-        chunk = 1024 # bytes
-        try:
-            while True:
-                data = sock.recv(chunk) # bytes
-                if not len(data): break
-                response += data
-        except TimeoutError as e:
-            status = 0
-            content = False
-            headers = {}
-            cookies = {}
-        else:
-            response = response.split(b"\r\n\r\n", 2)
-            responseHeader = response[0].decode('ascii')
-            body = response[1] if 1 < len(response) else b''
-            status = 0
-            if responseHeader:
-                m = re.match(HTTP_RE, responseHeader)
-                status = int(m.group(1)) if m else 0
-            headers = parse_http_header(responseHeader.split("\r\n"))
-            cookies = parse_http_cookies(headers['set-cookie']) if 'set-cookie' in headers else {}
-            if ('transfer-encoding' in headers) and ('chunked' == headers['transfer-encoding'].lower()):
-                # https://en.wikipedia.org/wiki/Chunked_transfer_encoding
-                body = parse_chunked(body)
-            content = body.decode('utf-8') if 'string' == self.option('return_type') else body
+            try:
+                if 'https' == scheme:
+                    sock = socket.create_connection(address)
+                    ctx = ssl.create_default_context()
+                    sock = ctx.wrap_socket(sock, server_hostname=host)
+                else:
+                    sock.connect(address)
+            except Exception as e:
+                return {
+                    'status' : 0,
+                    'content': False,
+                    'headers': {},
+                    'cookies': {}
+                }
 
-        sock.close()
+            contentLength = len(data) if data is not None else 0
+            headers['Content-Length'] = contentLength
+            headers['Host'] = host + ('' if ('https' == scheme and 443 == port) or ('http' == scheme and 80 == port) else (':'+str(port)))
+            headers['Connection'] = 'close'
+            if 'Cookie' in headers: del headers['Cookie']
+            requestHeaders = format_http_cookies(cookies, format_http_header(headers, []))
+
+            # send request
+            request = (method + ' ' + path + ' HTTP/1.1' + "\r\n" + "\r\n".join(requestHeaders) + "\r\n\r\n").encode('ascii')
+            if contentLength: request += data
+            sent = 0
+            total = len(request)
+            while sent < total: sent = sent + sock.send(request[sent:])
+
+            # receive response
+            response = b''
+            chunk = 1024 # bytes
+            try:
+                while True:
+                    data = sock.recv(chunk) # bytes
+                    if not len(data): break
+                    response += data
+            except TimeoutError as e:
+                sock.close()
+                return {
+                    'status' : 0,
+                    'content': False,
+                    'headers': {},
+                    'cookies': {}
+                }
+            else:
+                sock.close()
+                response = response.split(b"\r\n\r\n", 2)
+                responseHeader = response[0].decode('ascii')
+                responseBody = response[1] if 1 < len(response) else b''
+                responseStatus = 0
+                if responseHeader:
+                    m = re.search(HTTP_RE, responseHeader)
+                    responseStatus = int(m.group(1)) if m else 0
+                responseHeaders = parse_http_header(responseHeader.split("\r\n"))
+                #responseHeaders.update(_responseHeaders)
+                responseCookies = parse_http_cookies(responseHeaders['set-cookie']) if 'set-cookie' in responseHeaders else {}
+                if ('transfer-encoding' in responseHeaders) and ('chunked' == responseHeaders['transfer-encoding'].lower()):
+                    # https://en.wikipedia.org/wiki/Chunked_transfer_encoding
+                    responseBody = parse_chunked(responseBody)
+                if (0 < follow_redirects) and (301 <= responseStatus and responseStatus <= 308):
+                    m = re.search(LOCATION_RE, responseHeader)
+                    if m: #and m.group(1) != uri
+                        redirect += 1
+                        uri = m.group(1)
+                        #cookies = merge_cookies(cookies, responseCookies)
+                        cookies = {} # do not send any cookies
+                        scheme0 = scheme
+                        host0 = host
+                        port0 = port
+                        continue
+                    else:
+                        break
+                else:
+                    break
 
         return {
-            'status' : status,
-            'content': content,
-            'headers': headers,
-            'cookies': cookies
+            'status' : responseStatus,
+            'content': False if redirect > follow_redirects else (responseBody.decode('utf-8') if 'string' == self.option('return_type') else responseBody),
+            'headers': responseHeaders,
+            'cookies': responseCookies
         }
 
 
@@ -240,6 +299,7 @@ class EazyHttpRedirectHandler(urllib.request.HTTPRedirectHandler):
         return response if self.redirect_count > self.max_redirects else super().http_error_308(request, response, code, msg, headers)
 
 HTTP_RE = re.compile(r'HTTP/[\d\.]+\s+(\d{3})')
+LOCATION_RE = re.compile(r'Location:\s*(\S+)', re.I)
 
 def parse_http_header(responseHeader):
     responseHeaders = {}
@@ -319,7 +379,10 @@ def parse_cookie(s, isRaw = False, onlyNameValue = False):
         value = part[1].strip() if 1 < len(part) else True
         cookie[name] = value
 
-    expires = datetime.fromtimestamp(int(cookie['expires']), tz=timezone.utc) if cookie['expires'].isnumeric() else datetime.strptime(cookie['expires'], '%a, %d %b %Y %H:%M:%S %Z')
+    try:
+        expires = datetime.fromtimestamp(int(cookie['expires']), tz=timezone.utc) if cookie['expires'].isnumeric() else datetime.strptime(cookie['expires'], '%a, %d %b %Y %H:%M:%S %Z')
+    except Exception as e:
+        expires = datetime.fromtimestamp(datetime.now(timezone.utc).timestamp() + 60, tz=timezone.utc)
     cookie['expires'] = expires.strftime('%a, %d %b %Y %H:%M:%S %Z')
 
     if ('max-age' in cookie) and (int(cookie['max-age']) > 0 or expires.timestamp() > datetime.now(timezone.utc).timestamp()):
@@ -394,12 +457,12 @@ def parse_chunked(chunked):
     i = 0
     while i < l:
         hex = ''
-        c = chunked[i].decode('ascii').upper()
+        c = chr(chunked[i]).upper()
         while ('0' <= c and c <= '9') or ('A' <= c and c <= 'F'):
             hex += c
             i += 1
             if i >= l: break
-            c = chunked[i].decode('ascii').upper()
+            c = chr(chunked[i]).upper()
         hl = len(hex)
         if not hl:
             break
@@ -410,6 +473,61 @@ def parse_chunked(chunked):
         else:
             break
     return content
+
+def is_same_origin(host, host2, port, port2, protocol, protocol2):
+    if (port != port2) or (protocol != protocol2): return False
+    host = host.lower()
+    host2 = host2.lower()
+    if host == host2: return True # same host
+    #if ('.' + host) == host2[-len(host)-1:]: return True # host2 is subdomain of host
+    if ('.' + host2) == host[-len(host2)-1:]: return True # host is subdomain of host2
+    return False
+
+def path_resolve(path, basepath):
+    if ('/' == path[0]) or (not basepath): return path # absolute
+    if '/' == basepath: return basepath + path # from root
+
+    p = path
+    b = basepath
+    absolute = False
+    trailing = False
+
+    if '/' == b[0]:
+        absolute = True
+        b = b[1:]
+    if '/' == b[-1]:
+        b = b[0:-1]
+    if '/' == p[0]:
+        p = p[1:]
+    if '/' == p[-1]:
+        trailing = True
+        p = p[0:-1]
+
+    #if not len(p) or not len(b): return ('/' if absolute else '' ) + path
+
+    parts = p.split('/')
+    base = b.split('/')
+
+    while len(parts):
+        if not len(base): return path
+        if '.' == parts[0]:
+            parts = parts[1:] # same dir
+        elif '..' == parts[0]:
+            parts = parts[1:]
+            base = base[0:-1] # dir up
+        else:
+            if parts[0] == base[-1]: base = base[0:-1] # remove duplicate
+            break # done
+    path = ('/' if absolute else '') + '/'.join(base) + '/' + '/'.join(parts)
+    if trailing and ('/' != path[-1]): path += '/'
+    return path
+
+def merge_cookies(cookies, setCookies):
+    # TODO: take care of secure, samesite, .. cookie flags
+    for name, setCookie in setCookies.items():
+        if (name not in cookies) or (cookies[name]['value'] != setCookie['value']):
+            cookies[name] = setCookie
+    return cookies
 
 def http_build_query_helper(key, val, arg_separator):
     if val is True: val = '1'

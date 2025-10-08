@@ -1,5 +1,5 @@
 <?php
-// run "php -S localhost:9000 test-server.php"
+// run "php -S 127.0.0.1:9000 test-server.php"
 
 include(dirname(__FILE__) . '/../../src/php/EazyHttp.php');
 
@@ -8,7 +8,7 @@ function request($do_http, $uri, $follow_redirects)
     return (new EazyHttp())
         ->option('methods',     [$do_http])
         ->option('follow_redirects', $follow_redirects)
-        ->get('http://localhost:9000' . $uri)
+        ->get('http://127.0.0.1:9000' . $uri)
     ;
 }
 function test()

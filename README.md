@@ -5,7 +5,7 @@ EazyHttp, easy, simple and fast HTTP requests for PHP, JavaScript, Python
 
 ![EazyHttp](/eazyhttp.jpg)
 
-version **1.1.0**
+version **1.2.0**
 
 **supports**
 
@@ -33,7 +33,7 @@ version **1.1.0**
 **Python (in any desired order)**
 
 * `urllib`
-* `socket` (incomplete)
+* `socket`
 
 **example**
 
@@ -152,7 +152,7 @@ print(json.dumps(response)) # dict: {status}, {content}, {headers}, {cookies}
 **see also:**
 
 * [ModelView](https://github.com/foo123/modelview.js) a simple, fast, powerful and flexible MVVM framework for JavaScript
-* [tico](https://github.com/foo123/tico) a tiny, super-simple MVC framework for PHP
+* [tico](https://github.com/foo123/tico) a mini, super-simple MVC framework for PHP
 * [LoginManager](https://github.com/foo123/LoginManager) a simple, barebones agnostic login manager for PHP, JavaScript, Python
 * [SimpleCaptcha](https://github.com/foo123/simple-captcha) a simple, image-based, mathematical captcha with increasing levels of difficulty for PHP, JavaScript, Python
 * [Dromeo](https://github.com/foo123/Dromeo) a flexible, and powerful agnostic router for PHP, JavaScript, Python

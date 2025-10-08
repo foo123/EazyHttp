@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# run "php -S 127.0.0.1:9000 test-server.php"
 import os, sys
 
 DIR = os.path.dirname(os.path.abspath(__file__))
@@ -36,14 +37,33 @@ def file_put_contents(path, content):
             file.write(str(content))
 
 def request(do_http, uri, follow_redirects):
-    return EazyHttp().option('methods', [do_http]).option('follow_redirects', follow_redirects).get('http://localhost:9000'  + uri)
+    return EazyHttp().option('methods', [do_http]).option('follow_redirects', follow_redirects).get('http://127.0.0.1:9000'  + uri)
 
 def test():
     import json
 
-    response = request('urllib', '/test/redirect.php?max_redirects=2', 3)
-    file_put_contents(DIR+'/test-redirect-urllib.php.txt', json.dumps(response))
-    response = request('urllib', '/test/redirect.php?max_redirects=10', 3)
-    file_put_contents(DIR+'/test-redirect-max-urllib.php.txt', json.dumps(response))
+    try:
+        response = request('urllib', '/test/redirect.php?max_redirects=2', 3)
+        file_put_contents(DIR+'/test-redirect-urllib.php.txt', json.dumps(response))
+    except Exception as error:
+        print(str(error))
+
+    try:
+        response = request('socket', '/test/redirect.php?max_redirects=2', 3)
+        file_put_contents(DIR+'/test-redirect-socket.php.txt', json.dumps(response))
+    except Exception as error:
+        print(str(error))
+
+    try:
+        response = request('urllib', '/test/redirect.php?max_redirects=10', 3)
+        file_put_contents(DIR+'/test-redirect-max-urllib.php.txt', json.dumps(response))
+    except Exception as error:
+        print(str(error))
+
+    try:
+        response = request('socket', '/test/redirect.php?max_redirects=10', 3)
+        file_put_contents(DIR+'/test-redirect-max-socket.php.txt', json.dumps(response))
+    except Exception as error:
+        print(str(error))
 
 test()
